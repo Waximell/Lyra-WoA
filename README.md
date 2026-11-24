@@ -1,3 +1,7 @@
+# 本仓库为 Lyra Viewer 的分支
+目的为尝试给 Lyra Viewer 制作 Windows on ARM 的二进制，并简单打包为 Msix 方便自用。具体工作、修改、workflow 由 AI（DeepSeek-V4.1-Flash）执行，如果介意请绕行。
+
+
 # Lyra Viewer
 
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20Lyra-ff5e5b?logo=ko-fi)](https://ko-fi.com/nineveh_dev)
