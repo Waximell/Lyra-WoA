@@ -96,9 +96,20 @@ function Copy-RidNatives([string]$baseDir, [string]$label) {
     }
 }
 
-foreach ($dir in Get-ChildItem $probePkgs -Directory) {
-    $nb = Join-Path $dir.FullName 'runtimes'
-    if (Test-Path $nb) { Copy-RidNatives $dir.FullName $dir.Name }
+# NuGet's --packages layout is <id>/<version>/, so the runtimes folder sits two levels down.
+$found = 0
+foreach ($idDir in Get-ChildItem $probePkgs -Directory) {
+    foreach ($verDir in Get-ChildItem $idDir.FullName -Directory) {
+        if (-not (Test-Path (Join-Path $verDir.FullName 'runtimes'))) { continue }
+        Copy-RidNatives $verDir.FullName "$($idDir.Name)/$($verDir.Name)"
+        $found++
+    }
+}
+if ($found -eq 0) {
+    $listing = Get-ChildItem $probePkgs -Directory | ForEach-Object {
+        "$($_.Name)[$((Get-ChildItem $_.FullName -Directory).Name -join ',')]"
+    }
+    Fail "no package under $probePkgs carried runtimes/ (found: $($listing -join ' '))"
 }
 
 # --- SDL3 straight out of the restored package --------------------------------
