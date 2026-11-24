@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    MSIX manifest template. ci/build-msix.ps1 substitutes the placeholders:
+      __PUBLISHER__  the signing certificate's Subject (must match exactly)
+      __VERSION__    four-part numeric version derived from release/VERSION
+
+    File associations are declarative: no registry writes, cleaned up on uninstall.
+    Windows lists Lyra under "Open with" and lets the user pick it as the default;
+    apps are not allowed to make themselves the default.
+-->
+<Package
+    xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+    xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+    xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+    IgnorableNamespaces="uap rescap">
+
+  <Identity
+      Name="LyraViewer.WoA"
+      Publisher="__PUBLISHER__"
+      Version="__VERSION__"
+      ProcessorArchitecture="arm64" />
+
+  <Properties>
+    <DisplayName>Lyra Viewer</DisplayName>
+    <PublisherDisplayName>Waximell</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <Description>Image viewer for Windows on ARM.</Description>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-US" />
+  </Resources>
+
+  <Applications>
+    <Application Id="LyraViewer" Executable="LyraViewer.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+          DisplayName="Lyra Viewer"
+          Description="Image viewer for Windows on ARM."
+          BackgroundColor="transparent"
+          Square150x150Logo="Assets\Square150x150Logo.png"
+          Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" ShortName="Lyra" />
+      </uap:VisualElements>
+
+      <Extensions>
+        <uap:Extension Category="windows.fileTypeAssociation">
+          <uap:FileTypeAssociation Name="lyra.image">
+            <uap:SupportedFileTypes>
+              <!-- PNG family -->
+              <uap:FileType>.png</uap:FileType>
+              <uap:FileType>.apng</uap:FileType>
+              <!-- JPEG family -->
+              <uap:FileType>.jpg</uap:FileType>
+              <uap:FileType>.jpeg</uap:FileType>
+              <uap:FileType>.jpe</uap:FileType>
+              <uap:FileType>.jfif</uap:FileType>
+              <!-- others -->
+              <uap:FileType>.gif</uap:FileType>
+              <uap:FileType>.webp</uap:FileType>
+              <uap:FileType>.avif</uap:FileType>
+              <uap:FileType>.heic</uap:FileType>
+              <uap:FileType>.heif</uap:FileType>
+              <uap:FileType>.svg</uap:FileType>
+              <uap:FileType>.bmp</uap:FileType>
+              <uap:FileType>.ico</uap:FileType>
+            </uap:SupportedFileTypes>
+          </uap:FileTypeAssociation>
+        </uap:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>

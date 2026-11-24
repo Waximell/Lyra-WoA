@@ -14,6 +14,7 @@ on:
     paths:
       - '.github/workflows/build-woa.yml'
       - 'ci/**'
+      - 'packaging/**'
 
 concurrency:
   group: woa-${{ github.ref }}
@@ -184,5 +185,61 @@ jobs:
         with:
           name: LyraViewer-windows-arm64
           path: LyraViewer-windows-arm64.zip
+          if-no-files-found: error
+          retention-days: 30
+
+  # Packs the very same bundle into an MSIX. Runs on an x64 runner on purpose: the
+  # package architecture lives in the manifest, so packing needs no ARM64 machine,
+  # and the Windows SDK tools are guaranteed to be there.
+  msix:
+    name: package arm64 MSIX
+    needs: app
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch the published bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: LyraViewer-windows-arm64
+          path: out/artifact
+
+      - name: Expand the bundle
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem out/artifact -Filter *.zip -Recurse | Select-Object -First 1
+          if (-not $zip) { throw 'no bundle zip inside the artifact' }
+          Expand-Archive $zip.FullName -DestinationPath out/publish -Force
+          Get-ChildItem out/publish | Sort-Object Name |
+            ForEach-Object { '{0,-28} {1,10:N2} MB' -f $_.Name, $(if ($_.PSIsContainer) { 0 } else { $_.Length/1MB }) }
+
+      - name: Write the signing certificate
+        shell: pwsh
+        env:
+          PFX_BASE64: ${{ secrets.MSIX_PFX_BASE64 }}
+        run: |
+          $path = Join-Path $env:RUNNER_TEMP 'lyra-signing.pfx'
+          [IO.File]::WriteAllBytes($path, [Convert]::FromBase64String($env:PFX_BASE64))
+          "PFX_PATH=$path" >> $env:GITHUB_ENV
+
+      - name: Pack and sign the MSIX
+        shell: pwsh
+        env:
+          PFX_PASSWORD: ${{ secrets.MSIX_PFX_PASSWORD }}
+        run: |
+          ./ci/build-msix.ps1 `
+            -PublishDir out/publish `
+            -OutFile out/LyraViewer-windows-arm64.msix `
+            -CertPath $env:PFX_PATH `
+            -CertPassword $env:PFX_PASSWORD `
+            -Version 0.6.0.0
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LyraViewer-windows-arm64-msix
+          path: |
+            out/LyraViewer-windows-arm64.msix
+            packaging/msix/lyra-woa.cer
           if-no-files-found: error
           retention-days: 30
