@@ -243,27 +243,26 @@ Write-Host '==> signtool sign'
 & $signtool sign /fd SHA256 /f $CertPath /p $CertPassword /tr 'http://timestamp.digicert.com' /td SHA256 $unsigned
 if ($LASTEXITCODE -ne 0) { throw "signtool sign failed ($LASTEXITCODE)" }
 
-# The certificate is self-signed, so a plain `verify /pa` reports "not trusted".
-# Trust the public half for the duration of the check, then remove it again.
+# The certificate is self-signed, so a plain `verify /pa` reports
+# "A certificate chain processed, but terminated in a root certificate which is
+# not trusted by the trust provider." WinVerifyTrust builds a chain and needs the
+# certificate in the Root store; the TrustedPeople store that MSIX *installation*
+# uses does not satisfy it. Trust the public half in CurrentUser\Root for the
+# duration of the check, then remove it again.
 Write-Host '==> signtool verify'
 $publicCert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($CertPath, $CertPassword)
-$store = [System.Security.Cryptography.X509Certificates.X509Store]::new('TrustedPeople', 'CurrentUser')
-$store.Open('ReadWrite')
-$added = $false
+$cerPath = Join-Path $work 'public-cert.cer'
+[System.IO.File]::WriteAllBytes($cerPath, $publicCert.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert))
+Write-Host "    trusting $($publicCert.Thumbprint) in CurrentUser\Root (temporary)"
+& certutil -user -f -addstore Root $cerPath | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "certutil could not trust the certificate ($LASTEXITCODE)" }
 try {
-    $store.Add([System.Security.Cryptography.X509Certificates.X509Certificate2]::new($publicCert.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert)))
-    $added = $true
     & $signtool verify /pa $unsigned
     if ($LASTEXITCODE -ne 0) { throw "signtool verify failed ($LASTEXITCODE)" }
 }
 finally {
-    if ($added) {
-        try {
-            $store.Remove([System.Security.Cryptography.X509Certificates.X509Certificate2]::new($publicCert.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert)))
-        }
-        catch { Write-Warning "could not remove the temporary trusted certificate: $_" }
-    }
-    $store.Close()
+    & certutil -user -delstore Root $publicCert.Thumbprint | Out-Null
+    if ($LASTEXITCODE -ne 0) { Write-Warning 'could not remove the temporary root certificate' }
     $publicCert.Dispose()
 }
 

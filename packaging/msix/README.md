@@ -13,6 +13,12 @@ Import-Certificate -FilePath .\waximell-selfsigned.cer -CertStoreLocation Cert:\
 Add-AppxPackage -Path .\LyraViewer-windows-arm64.msix
 ```
 
+如果第 2 步报「证书链…不受信任」，再把同一张证书导入受信任的根存储（仍不需要管理员）：
+
+```powershell
+Import-Certificate -FilePath .\waximell-selfsigned.cer -CertStoreLocation Cert:\CurrentUser\Root
+```
+
 证书信息（与 PixEz 的 MSIX 共用同一张自签证书，系统里信任一次即可）：
 
 | 项 | 值 |
