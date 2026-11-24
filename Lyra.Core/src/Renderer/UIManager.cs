@@ -79,7 +79,7 @@ public class UIManager : IDisposable
         // Layers are added in bottom-to-top order.
         _statusLayer = new StatusLayer(_context);
         _mainLayer = new MainLayer(_context);
-        _navLayer = new NavLayer(_context, () => _mainLayer.ContentRightEdge, () => _mainLayer.HelpRightEdge);
+        _navLayer = new NavLayer(_context, () => _mainLayer.ContentRightEdge, () => _mainLayer.HelpTopEdge);
         _navLayer.PreviousRequested += () => PreviousImageRequested?.Invoke();
         _navLayer.NextRequested += () => NextImageRequested?.Invoke();
         _navLayer.FirstRequested += () => FirstImageRequested?.Invoke();

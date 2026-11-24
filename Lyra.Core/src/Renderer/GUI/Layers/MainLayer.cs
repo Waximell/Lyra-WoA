@@ -69,11 +69,13 @@ public class MainLayer : IUIEvents, IDisposable
         _sidebar.Present ? _sidebar.ArrangedBounds.Left : float.MaxValue;
 
     /// <summary>
-    /// Right edge of the help pane when it is on screen, else 0.  NavLayer puts
-    /// the stop button just right of it, since both live in the bottom left.
+    /// Top edge of the help pane when it is on screen, else 0.  NavLayer stacks
+    /// the stop button directly above it, since both live in the bottom left.
     /// </summary>
-    public float HelpRightEdge =>
-        _helpSection.Root.Present ? _helpSection.Root.ArrangedBounds.Right : 0f;
+    public float HelpTopEdge =>
+        _helpSection.Root.Present && _helpSection.Root.ArrangedBounds.Height > 0f
+            ? _helpSection.Root.ArrangedBounds.Top
+            : 0f;
 
     public event Action? OpenFileRequested;
     public event Action? OpenDirectoryRequested;

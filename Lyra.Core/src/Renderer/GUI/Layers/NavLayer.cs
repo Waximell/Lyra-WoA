@@ -32,15 +32,15 @@ public readonly record struct NavState(
 //
 //  Bottom right, a row of three small buttons (one third of a chevron):
 //    info        -> i   (info pane)
-//    list        -> u   (sidebar)
+//    dashboard   -> u   (sidebar)
 //    maximise    -> f   (enter fullscreen; becomes minimise while fullscreen)
 //
 //  Bottom left, stop:
 //    -> closes every open pane (info / help / sidebar) and hides the three
 //       corner buttons; the chevrons and stop itself stay.  Pressing it again
 //       only brings the corner buttons back, panes stay closed, and the state
-//       is never remembered across launches.  When the help pane is visible
-//       stop moves to its right so the two never overlap.
+//       is never remembered across launches.  While the help pane is visible
+//       stop stacks directly above it instead of sitting on the text.
 //
 //  The layer root is Transient, so the empty space still pans the image.
 // ============================================================================
@@ -57,9 +57,9 @@ public sealed class NavLayer : IDisposable
     public event Action? FullscreenToggleRequested;
     public event Action? UiToggleRequested;
 
-    public NavLayer(UIContext context, Func<float> contentRightEdge, Func<float> helpRightEdge)
+    public NavLayer(UIContext context, Func<float> contentRightEdge, Func<float> helpTopEdge)
     {
-        _root = new NavOverlay(contentRightEdge, helpRightEdge);
+        _root = new NavOverlay(contentRightEdge, helpTopEdge);
         _root.PreviousClicked += () => PreviousRequested?.Invoke();
         _root.NextClicked += () => NextRequested?.Invoke();
         _root.FirstRequested += () => FirstRequested?.Invoke();
@@ -109,7 +109,7 @@ internal sealed class NavOverlay : ComponentBase, IContainer
     private readonly SvgImage _stopIcon;
 
     private readonly Func<float> _contentRightEdge;
-    private readonly Func<float> _helpRightEdge;
+    private readonly Func<float> _helpTopEdge;
     private readonly IComponent[] _children;
 
     private NavState _state;
@@ -123,17 +123,17 @@ internal sealed class NavOverlay : ComponentBase, IContainer
     public event Action? FullscreenClicked;
     public event Action? UiClicked;
 
-    public NavOverlay(Func<float> contentRightEdge, Func<float> helpRightEdge)
+    public NavOverlay(Func<float> contentRightEdge, Func<float> helpTopEdge)
     {
         _contentRightEdge = contentRightEdge;
-        _helpRightEdge = helpRightEdge;
+        _helpTopEdge = helpTopEdge;
 
         // ResourceLoader owns the SKPictures; each SvgImage only wraps one for
         // layout, so the same artwork can be shown at any button size.
         _previousIcon = new SvgImage(ResourceLoader.GetSvg("chevron_left"), MinSize, MinSize);
         _nextIcon = new SvgImage(ResourceLoader.GetSvg("chevron_right"), MinSize, MinSize);
         _infoIcon = new SvgImage(ResourceLoader.GetSvg("info"), MinSize, MinSize);
-        _sidebarIcon = new SvgImage(ResourceLoader.GetSvg("list"), MinSize, MinSize);
+        _sidebarIcon = new SvgImage(ResourceLoader.GetSvg("dashboard"), MinSize, MinSize);
         _maximiseIcon = new SvgImage(ResourceLoader.GetSvg("maximise"), MinSize, MinSize);
         _minimiseIcon = new SvgImage(ResourceLoader.GetSvg("minimise"), MinSize, MinSize);
         _stopIcon = new SvgImage(ResourceLoader.GetSvg("stop"), MinSize, MinSize);
@@ -295,13 +295,16 @@ internal sealed class NavOverlay : ComponentBase, IContainer
         var infoRight = listRight - small - ButtonGap;
         ArrangeSmall(_info, _infoIcon, infoRight, rowTop, small);
 
-        // Bottom-left stop; it slides right of the help pane when that is open
-        // so the two never sit on top of each other.
-        var helpRight = _state.HelpVisible ? _helpRightEdge() : 0f;
-        var stopLeft = helpRight > 0f
-            ? Math.Max(contentBounds.Left + EdgeMargin, helpRight + EdgeMargin)
-            : contentBounds.Left + EdgeMargin;
-        ArrangeSmall(_stop, _stopIcon, stopLeft + small, rowTop, small);
+        // Bottom-left stop.  While the help pane is open it stacks directly
+        // above it (never on top of the text) and drops back to the corner once
+        // the pane is closed.  The result is clamped to the canvas so a tall
+        // help table cannot push the button out of the window.
+        var stopLeft = contentBounds.Left + EdgeMargin;
+        var stopTop = rowTop;
+        var helpTop = _state.HelpVisible ? _helpTopEdge() : 0f;
+        if (helpTop > 0f)
+            stopTop = Math.Max(contentBounds.Top + EdgeMargin, helpTop - EdgeMargin - small);
+        ArrangeSmall(_stop, _stopIcon, stopLeft + small, stopTop, small);
     }
 
     private static void ArrangeSmall(Button button, SvgImage icon, float right, float top, float side)
