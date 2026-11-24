@@ -117,14 +117,20 @@ Write-Step 'fetching basis_universal transcoder sources'
 $basisDir = Join-Path $repo 'native\BasisWrapper\basis_universal'
 if (-not (Test-Path (Join-Path $basisDir 'transcoder\basisu_transcoder.cpp'))) {
     if (Test-Path $basisDir) { Remove-Item $basisDir -Recurse -Force }
-    # Only transcoder/ is compiled, so avoid pulling the editor/assets trees.
+    # Only transcoder/ is compiled... but with BASISD_SUPPORT_KTX2_ZSTD the transcoder does
+    # `#include "../zstd/zstd.h"`, so the vendored zstd/ headers must be present too.
     git clone --depth 1 --filter=blob:none --sparse `
         https://github.com/BinomialLLC/basis_universal $basisDir
     if ($LASTEXITCODE -ne 0) { throw 'git clone of basis_universal failed' }
-    git -C $basisDir sparse-checkout set transcoder
+    git -C $basisDir sparse-checkout set transcoder zstd
     if ($LASTEXITCODE -ne 0) { throw 'git sparse-checkout of basis_universal failed' }
 } else {
     Write-Host 'basis_universal already present'
+}
+if (-not (Test-Path (Join-Path $basisDir 'zstd\zstd.h'))) {
+    Write-Host 'adding zstd/ to the sparse checkout (transcoder includes ../zstd/zstd.h)'
+    git -C $basisDir sparse-checkout set transcoder zstd
+    if ($LASTEXITCODE -ne 0) { throw 'git sparse-checkout set transcoder zstd failed' }
 }
 
 # ------------------------------------------------------------ 4. wrappers ------
