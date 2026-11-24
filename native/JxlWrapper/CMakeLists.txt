@@ -35,12 +35,30 @@ if (JXL_FOUND AND JXL_THREADS_FOUND)
     target_compile_options(jxl_native PRIVATE ${JXL_CFLAGS_OTHER})
 
 else ()
-    # --- Fallback: CMake config package (vcpkg, libjxl install tree, etc.) ---
-    find_package(libjxl CONFIG REQUIRED)
+    # --- Fallback: CMake config package (libjxl install tree, etc.) ---
+    find_package(libjxl CONFIG QUIET)
 
-    if (TARGET jxl AND TARGET jxl_threads)
-        target_link_libraries(jxl_native PRIVATE jxl jxl_threads)
+    if (TARGET jxl)
+        target_link_libraries(jxl_native PRIVATE jxl)
+        if (TARGET jxl_threads)
+            target_link_libraries(jxl_native PRIVATE jxl_threads)
+        endif ()
     else ()
-        message(FATAL_ERROR "libjxl found, but expected targets 'jxl' and 'jxl_threads' are missing.")
+        # vcpkg's libjxl installs headers, libs and .pc files but no CMake config
+        # package, and MSVC has no pkg-config, so locate the tree by hand.
+        find_path(JXL_INCLUDE_DIR jxl/decode.h)
+        find_library(JXL_LIBRARY NAMES jxl libjxl)
+        if (NOT JXL_INCLUDE_DIR OR NOT JXL_LIBRARY)
+            message(FATAL_ERROR "libjxl not found: no pkg-config, no CMake config, no headers/libs.")
+        endif ()
+        message(STATUS "libjxl located manually: ${JXL_LIBRARY} (${JXL_INCLUDE_DIR})")
+
+        target_include_directories(jxl_native PRIVATE ${JXL_INCLUDE_DIR})
+        target_link_libraries(jxl_native PRIVATE ${JXL_LIBRARY})
+
+        find_library(JXL_THREADS_LIBRARY NAMES jxl_threads libjxl_threads)
+        if (JXL_THREADS_LIBRARY)
+            target_link_libraries(jxl_native PRIVATE ${JXL_THREADS_LIBRARY})
+        endif ()
     endif ()
 endif ()

@@ -49,3 +49,10 @@ installed Visual Studio and `-A ARM64` selects the architecture.
   `dav1d` and the JPEG/JPEG-2000 codecs inside HEIF are left out on purpose.
 * CI proves the bundle *builds and is structurally complete*; whether OpenGL comes up on
   real WoA hardware still has to be checked by launching it there.
+
+## Changes to upstream sources
+
+- `native/JxlWrapper/CMakeLists.txt`: vcpkg's libjxl installs headers, libs and `.pc` files
+  but **no CMake config package**, and MSVC has no pkg-config, so both of upstream's branches
+  failed. Added a `find_path`/`find_library` fallback that locates `jxl/libjxl` and the optional
+  `jxl_threads` in the vcpkg tree. pkg-config still wins when it exists (macOS/Linux unaffected).
