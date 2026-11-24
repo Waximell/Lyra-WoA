@@ -56,8 +56,16 @@ else ()
         target_include_directories(jxl_native PRIVATE ${JXL_INCLUDE_DIR})
         target_link_libraries(jxl_native PRIVATE ${JXL_LIBRARY})
 
+        # libjxl 0.11 split the CMS and the thread runner out of the core library.
+        find_library(JXL_CMS_LIBRARY NAMES jxl_cms libjxl_cms)
+        if (JXL_CMS_LIBRARY)
+            message(STATUS "libjxl cms library: ${JXL_CMS_LIBRARY}")
+            target_link_libraries(jxl_native PRIVATE ${JXL_CMS_LIBRARY})
+        endif ()
+
         find_library(JXL_THREADS_LIBRARY NAMES jxl_threads libjxl_threads)
         if (JXL_THREADS_LIBRARY)
+            message(STATUS "libjxl threads library: ${JXL_THREADS_LIBRARY}")
             target_link_libraries(jxl_native PRIVATE ${JXL_THREADS_LIBRARY})
         endif ()
     endif ()

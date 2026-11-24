@@ -112,6 +112,19 @@ if (-not $SkipVcpkgInstall) {
 
 if (-not (Test-Path $installed)) { throw "vcpkg install tree missing: $installed" }
 
+# What did we actually get? This listing is the ground truth when a wrapper cannot
+# find its library (vcpkg ships no CMake config for several of these).
+Write-Step "vcpkg tree: $installed"
+Write-Host '  lib:'
+Get-ChildItem (Join-Path $installed 'lib') -File -Filter *.lib -EA 0 |
+    ForEach-Object { "    $($_.Name)" }
+Write-Host '  bin:'
+Get-ChildItem (Join-Path $installed 'bin') -File -Filter *.dll -EA 0 |
+    ForEach-Object { "    $($_.Name)" }
+Write-Host '  include/jxl:'
+Get-ChildItem (Join-Path $installed 'include\jxl') -File -EA 0 |
+    ForEach-Object { "    $($_.Name)" }
+
 # ------------------------------------------------- 3. basis_universal sources ---
 Write-Step 'fetching basis_universal transcoder sources'
 $basisDir = Join-Path $repo 'native\BasisWrapper\basis_universal'
