@@ -3,6 +3,7 @@
     MSIX manifest template. ci/build-msix.ps1 substitutes the placeholders:
       __PUBLISHER__  the signing certificate's Subject (must match exactly)
       __VERSION__    four-part numeric version derived from release/VERSION
+__ARCH__       ProcessorArchitecture: arm64 or x64, from the -Architecture parameter
 
     File associations are declarative: no registry writes, cleaned up on uninstall.
     Windows lists Lyra under "Open with" and lets the user pick it as the default;
@@ -20,7 +21,7 @@
       Name="LyraViewer.WoA"
       Publisher="__PUBLISHER__"
       Version="__VERSION__"
-      ProcessorArchitecture="arm64" />
+      ProcessorArchitecture="__ARCH__" />
 
   <Properties>
     <DisplayName>Lyra Viewer</DisplayName>

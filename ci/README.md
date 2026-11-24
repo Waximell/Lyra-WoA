@@ -56,3 +56,14 @@ installed Visual Studio and `-A ARM64` selects the architecture.
   but **no CMake config package**, and MSVC has no pkg-config, so both of upstream's branches
   failed. Added a `find_path`/`find_library` fallback that locates `jxl/libjxl` and the optional
   `jxl_threads` in the vcpkg tree. pkg-config still wins when it exists (macOS/Linux unaffected).
+
+## Second architecture (x64)
+
+`Windows x64` is a separate workflow on purpose: it reuses every script here (each one
+takes the triplet / arch / RID as a parameter) but runs on `windows-latest` with
+`x64-windows-release`, `-Arch x64`, `-r win-x64`. The ARM64 pipeline is left untouched,
+and the two no longer share a concurrency group.
+
+`Bundle MSIX` wraps the two signed `.msix` files from a release into one
+`.msixbundle` (`ci/bundle-msix.ps1`): MakeAppx generates the bundle manifest, then the
+bundle itself is signed. Windows installs the package matching the machine architecture.

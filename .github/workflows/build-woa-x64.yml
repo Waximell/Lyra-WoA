@@ -1,0 +1,283 @@
+name: Windows x64
+
+# Builds a Windows (win-x64) Lyra bundle from source on a stock x64 runner.
+# Deliberately a separate workflow from the ARM64 one: that pipeline is proven and
+# stays untouched, while this one can evolve (or break) without blocking it. Both
+# share ci/*.ps1 - every script takes the triplet / arch / RID as a parameter.
+#
+#   probe  - cheap sanity check that the NuGet-supplied native DLLs ship a win-x64 RID
+#   native - vcpkg + CMake build of native/*Wrapper and every dependency DLL
+#   app    - dotnet publish, stage lib/Windows, verify, zip
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-woa-x64.yml'
+      - 'ci/**'
+      - 'packaging/**'
+
+concurrency:
+  group: woa-x64-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 'true'
+  TRIPLET: x64-windows-release
+
+jobs:
+  probe:
+    name: probe NuGet natives
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: dotnet --info
+        shell: pwsh
+        run: dotnet --info
+
+      - name: Stage NuGet-provided natives for win-x64
+        shell: pwsh
+        run: ./ci/fetch-nuget-natives.ps1 -OutDir ci-probe-dist -Rid win-x64
+
+      - name: Check they are really x64 PE files
+        shell: pwsh
+        run: |
+          ./ci/verify-package.ps1 -Dir ci-probe-dist -ExpectMachine x64 `
+            -Required SDL3.dll,libSkiaSharp.dll,libHarfBuzzSharp.dll
+
+  native:
+    name: build native wrappers
+    runs-on: windows-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Report runner / vcpkg
+        shell: pwsh
+        run: |
+          Write-Host "runner arch: $env:PROCESSOR_ARCHITECTURE"
+          $v = if ($env:VCPKG_INSTALLATION_ROOT) { $env:VCPKG_INSTALLATION_ROOT } else { 'C:\vcpkg' }
+          Write-Host "vcpkg root: $v"
+          if (Test-Path "$v\vcpkg.exe") { & "$v\vcpkg.exe" version }
+          cmake --version
+          git -C "$v" log -1 --format='vcpkg baseline: %H' 2>$null
+
+      # Same idea as the ARM64 pipeline: cache the vcpkg binary cache per triplet.
+      # Only the triplet file itself is hashed, so adding a triplet for another
+      # architecture does not invalidate this cache.
+      - name: Restore vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}\.vcpkg-binary-cache
+          key: vcpkg-${{ env.TRIPLET }}-${{ hashFiles(format('ci/triplets/{0}.cmake', env.TRIPLET)) }}-ports-v1
+          restore-keys: |
+            vcpkg-${{ env.TRIPLET }}-
+
+      - name: Build wrappers and dependency DLLs
+        shell: pwsh
+        env:
+          VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/.vcpkg-binary-cache,readwrite
+        run: ./ci/build-native.ps1 -Triplet $env:TRIPLET -Arch x64
+
+      - name: Collect build logs on failure
+        if: failure()
+        shell: pwsh
+        run: |
+          $logs = Get-ChildItem build -Recurse -Filter *.log -File -ErrorAction SilentlyContinue
+          Write-Host "log files: $($logs.Count)"
+          $logs | Select-Object -First 40 | ForEach-Object {
+            Write-Host "===== $($_.FullName)"
+            Get-Content $_.FullName -Tail 120
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-dlls-x64
+          path: release/native/dist-windows
+          if-no-files-found: error
+          retention-days: 14
+
+  app:
+    name: publish win-x64 bundle
+    needs: native
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Fetch native DLLs from the native job
+        uses: actions/download-artifact@v4
+        with:
+          name: native-dlls-x64
+          path: release/native/dist-windows
+
+      - name: List staged natives
+        shell: pwsh
+        run: |
+          Get-ChildItem release/native/dist-windows -File |
+            Sort-Object Name | ForEach-Object { '{0,-28} {1,8:N2} MB' -f $_.Name, ($_.Length/1MB) }
+
+      - name: Provide release/VERSION
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path release -Force | Out-Null
+          Set-Content release/VERSION '0.6.0.4' -NoNewline -Encoding utf8
+          Write-Host "VERSION=$(Get-Content release/VERSION)"
+
+      - name: Stage NuGet-provided natives for win-x64
+        shell: pwsh
+        run: ./ci/fetch-nuget-natives.ps1 -OutDir release/native/dist-windows -Rid win-x64
+
+      - name: dotnet publish (self-contained single file)
+        shell: pwsh
+        run: |
+          dotnet publish Lyra.Core/Lyra.Core.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:DebugType=none `
+            -p:PublishReadyToRun=false `
+            -o out/publish
+          if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed ($LASTEXITCODE)" }
+
+      - name: Stage lib/Windows next to the app
+        shell: pwsh
+        run: |
+          # Directory.Build.targets only copies these into bin/, never into publish/.
+          $dst = 'out/publish/lib/Windows'
+          New-Item -ItemType Directory -Path $dst -Force | Out-Null
+          Copy-Item release/native/dist-windows/* $dst -Force
+          # One copy is enough: keep the arch-correct SDL3 next to the others.
+          Remove-Item out/publish/SDL3.dll -Force -ErrorAction SilentlyContinue
+          Get-ChildItem $dst -File | Measure-Object -Property Length -Sum |
+            ForEach-Object { 'lib/Windows: {0} files, {1:N1} MB' -f $_.Count, ($_.Sum/1MB) }
+
+      - name: Verify the bundle
+        shell: pwsh
+        run: ./ci/verify-package.ps1 -Dir out/publish -ExpectMachine x64 -RequireExe
+
+      - name: Zip
+        shell: pwsh
+        run: |
+          $zip = 'LyraViewer-windows-x64.zip'
+          if (Test-Path $zip) { Remove-Item $zip -Force }
+          Compress-Archive -Path out/publish/* -DestinationPath $zip -CompressionLevel Optimal
+          '{0} -> {1:N1} MB' -f $zip, ((Get-Item $zip).Length/1MB)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LyraViewer-windows-x64
+          path: LyraViewer-windows-x64.zip
+          if-no-files-found: error
+          retention-days: 30
+
+  # Packs the very same bundle into an MSIX. The package architecture comes from
+  # -Architecture, so this job is identical in spirit to the ARM64 one.
+  msix:
+    name: package x64 MSIX
+    needs: app
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch the published bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: LyraViewer-windows-x64
+          path: out/artifact
+
+      - name: Expand the bundle
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem out/artifact -Filter *.zip -Recurse | Select-Object -First 1
+          if (-not $zip) { throw 'no bundle zip inside the artifact' }
+          Expand-Archive $zip.FullName -DestinationPath out/publish -Force
+          Get-ChildItem out/publish | Sort-Object Name |
+            ForEach-Object { '{0,-28} {1,10:N2} MB' -f $_.Name, $(if ($_.PSIsContainer) { 0 } else { $_.Length/1MB }) }
+
+      - name: Write the signing certificate
+        shell: pwsh
+        env:
+          PFX_BASE64: ${{ secrets.MSIX_PFX_BASE64 }}
+        run: |
+          $path = Join-Path $env:RUNNER_TEMP 'lyra-signing.pfx'
+          [IO.File]::WriteAllBytes($path, [Convert]::FromBase64String($env:PFX_BASE64))
+          "PFX_PATH=$path" >> $env:GITHUB_ENV
+
+      - name: Pack and sign the MSIX
+        shell: pwsh
+        env:
+          PFX_PASSWORD: ${{ secrets.MSIX_PFX_PASSWORD }}
+        run: |
+          ./ci/build-msix.ps1 `
+            -PublishDir out/publish `
+            -OutFile out/LyraViewer-windows-x64.msix `
+            -CertPath $env:PFX_PATH `
+            -CertPassword $env:PFX_PASSWORD `
+            -Version 0.6.0.4 `
+            -Architecture x64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LyraViewer-windows-x64-msix
+          path: out/LyraViewer-windows-x64.msix
+          if-no-files-found: error
+          retention-days: 30
+
+  # Publishes into the same release tag as the ARM64 pipeline, so one release page
+  # carries both architectures. Whichever pipeline arrives first creates the tag.
+  release:
+    name: publish release
+    needs: [app, msix]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      TAG: v0.6.0.4-woa
+    steps:
+      - name: Fetch artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: List assets
+        run: find dist -type f | sort
+
+      - name: Create or update the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          shopt -s globstar nullglob
+          assets=(dist/**/*.zip dist/**/*.msix)
+          printf 'assets: %s\n' "${assets[@]}"
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            gh release upload "$TAG" "${assets[@]}" --repo "$REPO" --clobber
+          else
+            # Body intentionally left empty: the release notes are written by hand.
+            gh release create "$TAG" "${assets[@]}" \
+              --repo "$REPO" \
+              --title "Lyra Viewer 0.6.0.4 (Windows x64)" \
+              --notes "" || gh release upload "$TAG" "${assets[@]}" --repo "$REPO" --clobber
+          fi

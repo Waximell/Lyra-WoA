@@ -26,6 +26,10 @@
 .PARAMETER CertPassword
     PFX password.
 
+.PARAMETER Architecture
+    ProcessorArchitecture written into the manifest: arm64 (default), x64 or x86.
+    The publish output must already be built for that architecture.
+
 .EXAMPLE
     ./ci/build-msix.ps1 -PublishDir out/publish -OutFile out/LyraViewer.msix `
         -CertPath signing.pfx -CertPassword $env:PFX_PASSWORD -Version 0.6.0
@@ -38,6 +42,7 @@ param(
     [Parameter(Mandatory)][string]$CertPassword,
     [string]$Version = '0.6.0.0',
     [string]$Publisher = 'CN=Waximell, C=CN',
+    [ValidateSet('arm64', 'x64', 'x86')][string]$Architecture = 'arm64',
     [string]$AppIcon = (Join-Path $PSScriptRoot '..\Lyra.Core\Resources\AppIcon.png'),
     [string]$ManifestTemplate = (Join-Path $PSScriptRoot '..\packaging\msix\AppxManifest.xml'),
     [string]$WorkDir
@@ -246,7 +251,8 @@ finally { $source.Dispose() }
 Write-Host '==> writing AppxManifest.xml'
 $manifest = (Get-Content $ManifestTemplate -Raw).
     Replace('__PUBLISHER__', $Publisher).
-    Replace('__VERSION__', $Version)
+    Replace('__VERSION__', $Version).
+    Replace('__ARCH__', $Architecture)
 [IO.File]::WriteAllText((Join-Path $layout 'AppxManifest.xml'), $manifest, [Text.UTF8Encoding]::new($false))
 
 Write-Host '==> generating resources.pri'

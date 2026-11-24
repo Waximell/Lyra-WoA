@@ -1,0 +1,81 @@
+name: Bundle MSIX
+
+# Wraps the already signed per-architecture MSIX packages from a release into one
+# .msixbundle, so a single download installs on either x64 or ARM64.
+#
+# Run by hand once both build pipelines (Windows ARM64 / Windows x64) have
+# published their .msix to the same tag. Everything is idempotent: re-running
+# rebuilds the bundle from the current release assets and overwrites it.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag holding the two .msix assets
+        required: true
+        default: v0.6.0.4-woa
+      asset_name:
+        description: File name of the bundle to upload
+        required: true
+        default: LyraViewer-windows.msixbundle
+
+concurrency:
+  group: bundle-msix-${{ inputs.tag }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  bundle:
+    name: make the .msixbundle
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the per-architecture MSIX packages
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          New-Item -ItemType Directory -Path out/msix -Force | Out-Null
+          gh release download $env:TAG --repo $env:REPO --dir out/msix `
+            --pattern '*-arm64.msix' --pattern '*-x64.msix'
+          Get-ChildItem out/msix -File | ForEach-Object { '{0,-40} {1,8:N2} MB' -f $_.Name, ($_.Length/1MB) }
+          $count = @(Get-ChildItem out/msix -Filter *.msix -File).Count
+          if ($count -ne 2) { throw "expected exactly 2 msix packages in $env:TAG, found $count" }
+
+      - name: Write the signing certificate
+        shell: pwsh
+        env:
+          PFX_BASE64: ${{ secrets.MSIX_PFX_BASE64 }}
+        run: |
+          $path = Join-Path $env:RUNNER_TEMP 'lyra-signing.pfx'
+          [IO.File]::WriteAllBytes($path, [Convert]::FromBase64String($env:PFX_BASE64))
+          "PFX_PATH=$path" >> $env:GITHUB_ENV
+
+      - name: Bundle and sign
+        shell: pwsh
+        env:
+          PFX_PASSWORD: ${{ secrets.MSIX_PFX_PASSWORD }}
+          ASSET: ${{ inputs.asset_name }}
+        run: |
+          ./ci/bundle-msix.ps1 `
+            -MsixDir out/msix `
+            -OutFile "out/$env:ASSET" `
+            -CertPath $env:PFX_PATH `
+            -CertPassword $env:PFX_PASSWORD
+
+      - name: Upload to the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+          ASSET: ${{ inputs.asset_name }}
+        run: |
+          gh release upload $env:TAG "out/$env:ASSET" --repo $env:REPO --clobber
+          gh release view $env:TAG --repo $env:REPO --json assets --jq '.assets[].name'
