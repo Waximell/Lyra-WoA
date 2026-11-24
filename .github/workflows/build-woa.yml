@@ -240,6 +240,53 @@ jobs:
           name: LyraViewer-windows-arm64-msix
           path: |
             out/LyraViewer-windows-arm64.msix
-            packaging/msix/lyra-woa.cer
+            packaging/msix/waximell-selfsigned.cer
           if-no-files-found: error
           retention-days: 30
+
+  # Publishes both artifacts as a GitHub Release, so the .msix can be installed
+  # straight from the release page.
+  release:
+    name: publish release
+    needs: [app, msix]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      TAG: v0.6.0-woa
+    steps:
+      - name: Fetch artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: List assets
+        run: find dist -type f | sort
+
+      - name: Create or update the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          shopt -s globstar nullglob
+          assets=(dist/**/*.zip dist/**/*.msix dist/**/*.cer)
+          printf 'assets: %s\n' "${assets[@]}"
+          cat > notes.md <<'EOF'
+          Windows on ARM (arm64) build, compiled from source on GitHub's native arm64 runner.
+
+          Loose bundle: LyraViewer-windows-arm64.zip (unsigned self-extracting exe, Defender may flag it).
+          Installer: LyraViewer-windows-arm64.msix - trust waximell-selfsigned.cer first, see packaging/msix/README.md.
+
+          File associations (.png/.jpg/.gif/.webp/.avif/.heic/.svg ...) are declared by the package;
+          Windows still asks which app to use the first time.
+          EOF
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            gh release upload "$TAG" "${assets[@]}" --repo "$REPO" --clobber
+          else
+            gh release create "$TAG" "${assets[@]}" \
+              --repo "$REPO" \
+              --title "Lyra Viewer 0.6.0 (Windows ARM64)" \
+              --notes-file notes.md
+          fi

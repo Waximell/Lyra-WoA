@@ -7,19 +7,19 @@
 
 ```powershell
 # 1. 信任自签证书（只需一次）
-Import-Certificate -FilePath .\lyra-woa.cer -CertStoreLocation Cert:\CurrentUser\TrustedPeople
+Import-Certificate -FilePath .\waximell-selfsigned.cer -CertStoreLocation Cert:\CurrentUser\TrustedPeople
 
 # 2. 安装
 Add-AppxPackage -Path .\LyraViewer-windows-arm64.msix
 ```
 
-证书信息：
+证书信息（与 PixEz 的 MSIX 共用同一张自签证书，系统里信任一次即可）：
 
 | 项 | 值 |
 |---|---|
 | Subject | `CN=Waximell, C=CN` |
-| 指纹 | `B86EAFBA9EC6C69673E3CAA2BFFD1E48F05679FA` |
-| 有效期至 | 2036-11-24 |
+| 指纹 | `B1C5C4F56505E5F910FCEB32BC77E2E20C7EDBEB` |
+| 有效期至 | 2036-11-17 |
 
 私钥（`.pfx`）不在仓库里，签名密码只存在仓库 Secrets（`MSIX_PFX_BASE64` / `MSIX_PFX_PASSWORD`）。
 
