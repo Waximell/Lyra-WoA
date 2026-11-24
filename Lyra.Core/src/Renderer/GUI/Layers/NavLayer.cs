@@ -3,6 +3,7 @@ using Lyra.UI;
 using Lyra.UI.Components;
 using Lyra.UI.Components.Controls.Button;
 using Lyra.UI.Components.Primitives;
+using Lyra.SdlCore;
 using Lyra.UI.SupportingTypes;
 using SkiaSharp;
 
@@ -20,7 +21,8 @@ public readonly record struct NavState(
     bool SidebarVisible,
     bool HelpVisible,
     bool IsFullscreen,
-    bool UiHidden);
+    bool UiHidden,
+    DisplayMode DisplayMode);
 
 // ============================================================================
 //  NavLayer - the on-screen chrome: chevrons, corner buttons, hide toggle.
@@ -30,8 +32,10 @@ public readonly record struct NavState(
 //    hold 1s      -> first / last image   (same path as Home / End)
 //    right click  -> first / last image
 //
-//  Bottom right, a row of three small buttons (one third of a chevron):
+//  Bottom right, a row of four small buttons (one third of a chevron):
 //    info        -> i   (info pane)
+//    zoom        -> 0   (fit to screen / original size; the glyph follows the
+//                        current display mode, zoom in while fitted)
 //    dashboard   -> u   (sidebar)
 //    maximise    -> f   (enter fullscreen; becomes minimise while fullscreen)
 //
@@ -55,6 +59,7 @@ public sealed class NavLayer : IDisposable
     public event Action? InfoToggleRequested;
     public event Action? SidebarToggleRequested;
     public event Action? FullscreenToggleRequested;
+    public event Action? ZoomToggleRequested;
     public event Action? UiToggleRequested;
 
     public NavLayer(UIContext context, Func<float> contentRightEdge, Func<float> helpTopEdge)
@@ -67,6 +72,7 @@ public sealed class NavLayer : IDisposable
         _root.InfoClicked += () => InfoToggleRequested?.Invoke();
         _root.SidebarClicked += () => SidebarToggleRequested?.Invoke();
         _root.FullscreenClicked += () => FullscreenToggleRequested?.Invoke();
+        _root.ZoomClicked += () => ZoomToggleRequested?.Invoke();
         _root.UiClicked += () => UiToggleRequested?.Invoke();
 
         // Added after MainLayer, so the chrome draws above the panes while
@@ -96,6 +102,8 @@ internal sealed class NavOverlay : ComponentBase, IContainer
 
     private readonly Button _info;
     private readonly Button _sidebar;
+    private readonly Button _zoomFit;
+    private readonly Button _zoomOriginal;
     private readonly Button _enterFullscreen;
     private readonly Button _exitFullscreen;
     private readonly Button _stop;
@@ -104,6 +112,8 @@ internal sealed class NavOverlay : ComponentBase, IContainer
     private readonly SvgImage _nextIcon;
     private readonly SvgImage _infoIcon;
     private readonly SvgImage _sidebarIcon;
+    private readonly SvgImage _zoomInIcon;
+    private readonly SvgImage _zoomOutIcon;
     private readonly SvgImage _maximiseIcon;
     private readonly SvgImage _minimiseIcon;
     private readonly SvgImage _stopIcon;
@@ -114,6 +124,9 @@ internal sealed class NavOverlay : ComponentBase, IContainer
 
     private NavState _state;
 
+    /// <summary>True while the zoom button shows "zoom in", i.e. fit to screen.</summary>
+    private bool _zoomIsFit = true;
+
     public event Action? PreviousClicked;
     public event Action? NextClicked;
     public event Action? FirstRequested;
@@ -121,6 +134,7 @@ internal sealed class NavOverlay : ComponentBase, IContainer
     public event Action? InfoClicked;
     public event Action? SidebarClicked;
     public event Action? FullscreenClicked;
+    public event Action? ZoomClicked;
     public event Action? UiClicked;
 
     public NavOverlay(Func<float> contentRightEdge, Func<float> helpTopEdge)
@@ -136,6 +150,8 @@ internal sealed class NavOverlay : ComponentBase, IContainer
         _sidebarIcon = new SvgImage(ResourceLoader.GetSvg("dashboard"), MinSize, MinSize);
         _maximiseIcon = new SvgImage(ResourceLoader.GetSvg("maximise"), MinSize, MinSize);
         _minimiseIcon = new SvgImage(ResourceLoader.GetSvg("minimise"), MinSize, MinSize);
+        _zoomInIcon = new SvgImage(ResourceLoader.GetSvg("zoom_in"), MinSize, MinSize);
+        _zoomOutIcon = new SvgImage(ResourceLoader.GetSvg("zoom_out"), MinSize, MinSize);
         _stopIcon = new SvgImage(ResourceLoader.GetSvg("stop"), MinSize, MinSize);
 
         _previous = BuildChevron(_previousIcon);
@@ -143,6 +159,8 @@ internal sealed class NavOverlay : ComponentBase, IContainer
 
         _info = BuildSmall(_infoIcon);
         _sidebar = BuildSmall(_sidebarIcon);
+        _zoomFit = BuildSmall(_zoomInIcon);
+        _zoomOriginal = BuildSmall(_zoomOutIcon);
         _enterFullscreen = BuildSmall(_maximiseIcon);
         _exitFullscreen = BuildSmall(_minimiseIcon);
         _stop = BuildSmall(_stopIcon);
@@ -154,6 +172,8 @@ internal sealed class NavOverlay : ComponentBase, IContainer
 
         _info.Click += () => InfoClicked?.Invoke();
         _sidebar.Click += () => SidebarClicked?.Invoke();
+        _zoomFit.Click += () => ZoomClicked?.Invoke();
+        _zoomOriginal.Click += () => ZoomClicked?.Invoke();
         _enterFullscreen.Click += () => FullscreenClicked?.Invoke();
         _exitFullscreen.Click += () => FullscreenClicked?.Invoke();
         _stop.Click += () => UiClicked?.Invoke();
@@ -161,7 +181,8 @@ internal sealed class NavOverlay : ComponentBase, IContainer
         _children =
         [
             _previous, _next,
-            _info, _sidebar, _enterFullscreen, _exitFullscreen,
+            _info, _sidebar, _zoomFit, _zoomOriginal,
+            _enterFullscreen, _exitFullscreen,
             _stop
         ];
 
@@ -239,6 +260,17 @@ internal sealed class NavOverlay : ComponentBase, IContainer
         _enterFullscreen.Present = showCorner && !state.IsFullscreen;
         _exitFullscreen.Present = showCorner && state.IsFullscreen;
 
+        // Zoom in while fitted, zoom out at actual size.  Free zoom (the user
+        // wheeled or pressed +/-) keeps whichever glyph was last shown, so only
+        // the two named modes move the button.
+        if (state.DisplayMode == DisplayMode.FitToScreen)
+            _zoomIsFit = true;
+        else if (state.DisplayMode == DisplayMode.OriginalImageSize)
+            _zoomIsFit = false;
+
+        _zoomFit.Present = showCorner && _zoomIsFit;
+        _zoomOriginal.Present = showCorner && !_zoomIsFit;
+
         // The stop button is always available - it is the way back.
         _stop.Present = true;
 
@@ -292,7 +324,13 @@ internal sealed class NavOverlay : ComponentBase, IContainer
         var listRight = cornerRight - small - ButtonGap;
         ArrangeSmall(_sidebar, _sidebarIcon, listRight, rowTop, small);
 
-        var infoRight = listRight - small - ButtonGap;
+        // Second from the left of the row: the display mode toggle, sitting
+        // between info and the sidebar so the order matches the keys it mirrors.
+        var zoomRight = listRight - small - ButtonGap;
+        ArrangeSmall(_zoomFit, _zoomInIcon, zoomRight, rowTop, small);
+        ArrangeSmall(_zoomOriginal, _zoomOutIcon, zoomRight, rowTop, small);
+
+        var infoRight = zoomRight - small - ButtonGap;
         ArrangeSmall(_info, _infoIcon, infoRight, rowTop, small);
 
         // Bottom-left stop.  While the help pane is open it stacks directly
@@ -352,6 +390,8 @@ internal sealed class NavOverlay : ComponentBase, IContainer
             _sidebarIcon.Dispose();
             _maximiseIcon.Dispose();
             _minimiseIcon.Dispose();
+            _zoomInIcon.Dispose();
+            _zoomOutIcon.Dispose();
             _stopIcon.Dispose();
         }
 

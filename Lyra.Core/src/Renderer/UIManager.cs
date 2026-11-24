@@ -63,6 +63,9 @@ public class UIManager : IDisposable
     /// <summary>Fullscreen corner button; same as the F key.</summary>
     public event Action? FullscreenToggleRequested;
 
+    /// <summary>Zoom corner button; same as the 0 key (fit / actual size).</summary>
+    public event Action? ZoomToggleRequested;
+
     /// <summary>Stop button; hides the panes and the corner chrome.</summary>
     public event Action? UiToggleRequested;
 
@@ -87,6 +90,7 @@ public class UIManager : IDisposable
         _navLayer.InfoToggleRequested += () => InfoToggleRequested?.Invoke();
         _navLayer.SidebarToggleRequested += () => SidebarToggleRequested?.Invoke();
         _navLayer.FullscreenToggleRequested += () => FullscreenToggleRequested?.Invoke();
+        _navLayer.ZoomToggleRequested += () => ZoomToggleRequested?.Invoke();
         _navLayer.UiToggleRequested += () => UiToggleRequested?.Invoke();
     }
 
@@ -179,7 +183,8 @@ public class UIManager : IDisposable
             state.AppStates.SidebarVisible,
             state.AppStates.HelpVisible,
             state.AppStates.IsFullscreen,
-            state.AppStates.UiHidden));
+            state.AppStates.UiHidden,
+            state.AppStates.DisplayMode));
     }
 
     /// <summary>

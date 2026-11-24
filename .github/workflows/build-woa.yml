@@ -136,7 +136,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path release -Force | Out-Null
-          Set-Content release/VERSION '0.6.0.4' -NoNewline -Encoding utf8
+          Set-Content release/VERSION '0.6.0.5' -NoNewline -Encoding utf8
           Write-Host "VERSION=$(Get-Content release/VERSION)"
 
       - name: Stage NuGet-provided natives for win-arm64
@@ -233,7 +233,7 @@ jobs:
             -OutFile out/LyraViewer-windows-arm64.msix `
             -CertPath $env:PFX_PATH `
             -CertPassword $env:PFX_PASSWORD `
-            -Version 0.6.0.4
+            -Version 0.6.0.5
 
       - uses: actions/upload-artifact@v4
         with:
@@ -252,7 +252,7 @@ jobs:
     permissions:
       contents: write
     env:
-      TAG: v0.6.0.4-woa
+      TAG: v0.6.0.5-woa
     steps:
       - name: Fetch artifacts
         uses: actions/download-artifact@v4
@@ -277,6 +277,6 @@ jobs:
             # Body intentionally left empty: the release notes are written by hand.
             gh release create "$TAG" "${assets[@]}" \
               --repo "$REPO" \
-              --title "Lyra Viewer 0.6.0.4 (Windows ARM64)" \
+              --title "Lyra Viewer 0.6.0.5 (Windows ARM64)" \
               --notes "" || gh release upload "$TAG" "${assets[@]}" --repo "$REPO" --clobber
           fi
