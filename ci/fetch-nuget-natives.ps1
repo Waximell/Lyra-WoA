@@ -90,15 +90,23 @@ function Copy-RidNatives([string]$baseDir, [string]$label) {
         if (Test-Path $runtimes) { $avail = (Get-ChildItem $runtimes -Directory).Name }
         Fail "$label does not ship runtimes/$Rid/native (available RIDs: $($avail -join ', '))"
     }
-    foreach ($f in Get-ChildItem $src -File) {
+    foreach ($f in Get-ChildItem $src -File -Filter *.dll) {
         Copy-Item $f.FullName (Join-Path $out $f.Name) -Force
         "{0,-28} <- {1}" -f $f.Name, $label | Write-Host
     }
 }
 
+# Restoring with -r <rid> drags in whole runtime packs (Microsoft.NETCore.App.Runtime.*,
+# WPF/DIASymReader natives, 90 MB pdb files...). Only these two packages may contribute.
+$wantPackages = @('skiasharp.nativeassets.win32', 'harfbuzzsharp.nativeassets.win32')
+
 # NuGet's --packages layout is <id>/<version>/, so the runtimes folder sits two levels down.
 $found = 0
 foreach ($idDir in Get-ChildItem $probePkgs -Directory) {
+    if ($wantPackages -notcontains $idDir.Name.ToLower()) {
+        Write-Host "  skip package $($idDir.Name)"
+        continue
+    }
     foreach ($verDir in Get-ChildItem $idDir.FullName -Directory) {
         if (-not (Test-Path (Join-Path $verDir.FullName 'runtimes'))) { continue }
         Copy-RidNatives $verDir.FullName "$($idDir.Name)/$($verDir.Name)"

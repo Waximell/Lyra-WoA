@@ -170,7 +170,7 @@ jobs:
 
       - name: Verify the bundle
         shell: pwsh
-        run: ./ci/verify-package.ps1 -Dir out/publish -ExpectMachine arm64
+        run: ./ci/verify-package.ps1 -Dir out/publish -ExpectMachine arm64 -RequireExe
 
       - name: Zip
         shell: pwsh

@@ -15,7 +15,9 @@ param(
     [ValidateSet('arm64', 'x64', 'x86')] [string]$ExpectMachine = 'arm64',
     [string]$LibSubdir = 'lib\Windows',
     # Override to check a subset (the probe job only has the NuGet-provided natives).
-    [string[]]$Required = @()
+    [string[]]$Required = @(),
+    # Only a published bundle has the launcher; the staging directories do not.
+    [switch]$RequireExe
 )
 
 $ErrorActionPreference = 'Stop'
@@ -144,7 +146,7 @@ if ($exe) {
     $ok = ([int]$m -eq [int]$expected)
     if (-not $ok) { $failures += "LyraViewer.exe is $mName, expected $ExpectMachine" }
     Write-Host ("{0,-26} {1,-10} {2,8:N2} MB" -f 'LyraViewer.exe', $mName, ($exe.Length / 1MB)) -ForegroundColor $(if ($ok) { 'Green' } else { 'Red' })
-} else {
+} elseif ($RequireExe) {
     $failures += 'LyraViewer.exe not found in the bundle'
 }
 
@@ -156,4 +158,4 @@ if ($failures.Count -gt 0) {
     $failures | ForEach-Object { Write-Host "  - $_" -ForegroundColor Red; Write-Host "::error::$_" }
     exit 1
 }
-Write-Host "`nOK: all nine natives present, $ExpectMachine, imports resolvable" -ForegroundColor Green
+Write-Host "`nOK: $($required.Count) required natives present, $ExpectMachine, imports resolvable" -ForegroundColor Green
