@@ -43,6 +43,18 @@ Import-Certificate -FilePath .\waximell-selfsigned.cer -CertStoreLocation Cert:\
 
 首次双击某类图片会弹「你要如何打开这个文件？」，选一次 Lyra 即可。
 
+## 命令行启动
+
+清单里注册了执行别名（appExecutionAlias），装好后在终端里直接：
+
+```powershell
+lyra                       # 打开空窗口
+lyra .\photo.png           # 直接打开这张图
+```
+
+别名走的是 `%LOCALAPPDATA%\Microsoft\WindowsApps\lyra.exe`，由系统生成的存根转发到包里的
+`LyraViewer.exe`，所以不需要改 PATH。卸载后这个存根会一起消失。
+
 ## 卸载
 
 ```powershell

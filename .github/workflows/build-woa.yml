@@ -274,13 +274,16 @@ jobs:
           assets=(dist/**/*.zip dist/**/*.msix dist/**/*.cer)
           printf 'assets: %s\n' "${assets[@]}"
           cat > notes.md <<'EOF'
-          Windows on ARM (arm64) build, compiled from source on GitHub's native arm64 runner.
+          此分发随上游 main 编译，版本 0.6.0。
 
-          Loose bundle: LyraViewer-windows-arm64.zip (unsigned self-extracting exe, Defender may flag it).
-          Installer: LyraViewer-windows-arm64.msix - trust waximell-selfsigned.cer first, see packaging/msix/README.md.
+          本仓库未对项目源码做实质调整，仅添加 CI 与 Workflow 并运行。
 
-          File associations (.png/.jpg/.gif/.webp/.avif/.heic/.svg ...) are declared by the package;
-          Windows still asks which app to use the first time.
+          MSIX 额外添加了 appExecutionAlias: Lyra（终端里 `lyra <文件>` 即可启动），与如下格式关联：
+          .png .apng .jpg .jpeg .jpe .jfif .gif .webp .avif .heic .heif .bmp .ico .svg
+
+          经初步测试，与上游行为未发现偏离。
+
+          MSIX 签名为我自行生成的密钥，不保证私钥安全，非常不建议信任；如果有意使用本项目产物，请务必使用松散 zip。
           EOF
           if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
             gh release upload "$TAG" "${assets[@]}" --repo "$REPO" --clobber
