@@ -59,6 +59,21 @@ function Write-Step([string]$msg) {
     Write-Host "==> $msg" -ForegroundColor Cyan
 }
 
+# ------------------------------------------------------- 0. toolchain report ---
+Write-Step 'toolchain'
+Write-Host "PROCESSOR_ARCHITECTURE: $env:PROCESSOR_ARCHITECTURE"
+$vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+if (Test-Path $vswhere) {
+    & $vswhere -all -products * -format json |
+        ConvertFrom-Json |
+        ForEach-Object { '  VS {0} {1} -> {2}' -f $_.installationVersion, $_.displayName, $_.installationPath }
+} else {
+    Write-Host "  vswhere not found at $vswhere"
+}
+cmake --version | Select-Object -First 1
+Write-Host 'NOTE: the generator is not pinned - CMake picks the newest Visual Studio'
+Write-Host '      instance (the windows-11-arm label moved from VS 17 2022 to VS 18 2026).'
+
 # ---------------------------------------------------------------- 1. vcpkg -----
 Write-Step 'locating vcpkg'
 if (-not $VcpkgRoot) { $VcpkgRoot = $env:VCPKG_INSTALLATION_ROOT }
@@ -119,14 +134,20 @@ foreach ($name in $wrappers.Keys) {
     $bin    = Join-Path $repo "build\native-$name"
 
     Write-Step "cmake configure $name"
+    # No -G: the runner label moved from "Visual Studio 17 2022" to "Visual Studio 18
+    # 2026" in 2026, and CMake's default generator is whichever VS is installed newest.
     cmake -S $src -B $bin `
-        -G 'Visual Studio 17 2022' -A $Arch `
+        -A $Arch `
         "-DCMAKE_TOOLCHAIN_FILE=$toolchain" `
         "-DVCPKG_TARGET_TRIPLET=$Triplet" `
-        "-DVCPKG_OVERLAY_TRIPLETS=$repo\ci\triplets" `
         "-DCMAKE_PREFIX_PATH=$installed" `
         -DCMAKE_BUILD_TYPE=Release
-    if ($LASTEXITCODE -ne 0) { throw "cmake configure failed for $name" }
+    if ($LASTEXITCODE -ne 0) {
+        $cache = Join-Path $bin 'CMakeCache.txt'
+        if (Test-Path $cache) { Select-String '^CMAKE_GENERATOR' $cache }
+        throw "cmake configure failed for $name"
+    }
+    Select-String '^CMAKE_GENERATOR:INTERNAL=' (Join-Path $bin 'CMakeCache.txt') | ForEach-Object { "    $($_.Line)" }
 
     Write-Step "cmake build $name ($target)"
     cmake --build $bin --config Release --parallel

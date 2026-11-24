@@ -33,6 +33,14 @@ The bundle is therefore larger and has more files than the official x64 one, but
 import resolves from inside `lib/Windows`. Tightening this into a self-contained
 nine-file set is a later optimisation, not a prerequisite for "it runs".
 
+## Runner
+
+`windows-11-arm` is a **native ARM64** Windows 11 machine: Visual Studio Enterprise
+2026 (18.12, at `C:\Program Files\Microsoft Visual Studio\18\Enterprise`, with the
+`VC.Tools.ARM64` toolset), CMake 4.5, Ninja, and vcpkg at `C:\vcpkg`. The label used to
+point at the VS 2022 image, so nothing here pins a generator name — CMake picks the newest
+installed Visual Studio and `-A ARM64` selects the architecture.
+
 ## Known gaps
 
 * Third-party UI/GPU tests are not run: the runner has no GPU, and SDL/OpenGL paths

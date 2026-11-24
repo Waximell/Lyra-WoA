@@ -73,11 +73,13 @@ jobs:
 
       # vcpkg has no usable remote cache for our custom triplet, so keep the binary
       # cache between runs: a green native job then becomes a ~2 minute no-op.
+      # Key deliberately excludes the wrapper build script, so editing ci/build-native.ps1
+      # does not throw away 60+ minutes of compiled dependencies.
       - name: Restore vcpkg binary cache
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}\.vcpkg-binary-cache
-          key: vcpkg-${{ env.TRIPLET }}-${{ hashFiles('ci/build-native.ps1', 'ci/triplets/*.cmake') }}
+          key: vcpkg-${{ env.TRIPLET }}-${{ hashFiles('ci/triplets/*.cmake') }}-ports-v1
           restore-keys: |
             vcpkg-${{ env.TRIPLET }}-
 
