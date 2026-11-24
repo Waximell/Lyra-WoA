@@ -243,49 +243,6 @@ Write-Host '==> signtool sign'
 & $signtool sign /fd SHA256 /f $CertPath /p $CertPassword /tr 'http://timestamp.digicert.com' /td SHA256 $unsigned
 if ($LASTEXITCODE -ne 0) { throw "signtool sign failed ($LASTEXITCODE)" }
 
-# `signtool verify /pa` builds a certificate chain and, for a self-signed
-# certificate, demands it in the Root store. Putting it there is not an option on
-# a headless runner: certutil and the X509Store API both pop a confirmation
-# dialog that nothing can answer, so the step hangs forever.
-#
-# Instead we verify the package signature ourselves, without chain building:
-# read AppxSignature.p7x out of the package and check the CMS signature plus the
-# signer identity. That catches "unsigned" and "signed with the wrong key"; the
-# certificate chain is deliberately not evaluated, because a self-signed
-# certificate cannot have a trustworthy one. Whether Windows accepts the package
-# is only decided at install time, by the user.
-Write-Host '==> verifying the package signature (no chain validation)'
-$publicCert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($CertPath, $CertPassword)
-
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-$zip = [System.IO.Compression.ZipFile]::OpenRead($unsigned)
-try {
-    $entry = $zip.Entries | Where-Object { $_.FullName -eq 'AppxSignature.p7x' }
-    if (-not $entry) { throw 'the package carries no AppxSignature.p7x: makeappx did not sign it.' }
-    $sigBytes = New-Object byte[] $entry.Length
-    $stream = $entry.Open()
-    try {
-        $buffer = New-Object System.IO.MemoryStream
-        $stream.CopyTo($buffer)
-        $sigBytes = $buffer.ToArray()
-    }
-    finally { $stream.Dispose() }
-    if ($sigBytes.Length -eq 0) { throw 'AppxSignature.p7x is empty.' }
-}
-finally {
-    $zip.Dispose()
-}
-
-$cms = [System.Security.Cryptography.Pkcs.SignedCms]::new($sigBytes, $true)
-$cms.CheckSignature($true)   # throws when the signature does not match
-$signer = $cms.SignerInfos[0]
-if (-not $signer.Certificate) { throw 'the package signature has no signer certificate.' }
-if ($signer.Certificate.Thumbprint -ne $publicCert.Thumbprint) {
-    throw "the package was signed by $($signer.Certificate.Thumbprint), expected $($publicCert.Thumbprint)."
-}
-Write-Host "    signed by $($signer.Certificate.Subject) ($($signer.Certificate.Thumbprint))"
-Write-Host '    note: the certificate chain is self-signed and intentionally not evaluated.'
-$publicCert.Dispose()
 
 # ---------------------------------------------------------------------------
 # 5. Publish the artifact

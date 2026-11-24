@@ -238,9 +238,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: LyraViewer-windows-arm64-msix
-          path: |
-            out/LyraViewer-windows-arm64.msix
-            packaging/msix/waximell-selfsigned.cer
+          path: out/LyraViewer-windows-arm64.msix
           if-no-files-found: error
           retention-days: 30
 
@@ -271,19 +269,19 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s globstar nullglob
-          assets=(dist/**/*.zip dist/**/*.msix dist/**/*.cer)
+          assets=(dist/**/*.zip dist/**/*.msix)
           printf 'assets: %s\n' "${assets[@]}"
           cat > notes.md <<'EOF'
-          此分发随上游 main 编译，版本 0.6.0。
+          此分发随上游 main 编译，为 0.6.0
 
-          本仓库未对项目源码做实质调整，仅添加 CI 与 Workflow 并运行。
+          本仓库未对项目源码做实质调整，仅添加 CI 与 WorkFlow 并运行。
 
-          MSIX 额外添加了 appExecutionAlias: Lyra（终端里 `lyra <文件>` 即可启动），与如下格式关联：
-          .png .apng .jpg .jpeg .jpe .jfif .gif .webp .avif .heic .heif .bmp .ico .svg
+          MSIX额外添加了 appExecutionAlias: Lyra 与如下格式关联：
+          '.png .apng .jpg .jpeg .jpe .jfif .gif .webp .avif  .heic .heif .bmp .ico .svg'
 
-          经初步测试，与上游行为未发现偏离。
+          经初步测试与上游行为未发现偏离。
 
-          MSIX 签名为我自行生成的密钥，不保证私钥安全，非常不建议信任；如果有意使用本项目产物，请务必使用松散 zip。
+          MSIX 签名为我自行生成的密钥，不保证私钥安全，非常不建议信任，如果有意使用本项目产物请务必使用松散 zip。
           EOF
           if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
             gh release upload "$TAG" "${assets[@]}" --repo "$REPO" --clobber
