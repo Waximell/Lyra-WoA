@@ -134,6 +134,30 @@ New-Item -ItemType Directory -Path $assets -Force | Out-Null
 
 $source = [System.Drawing.Image]::FromFile($AppIcon)
 try {
+    # The project icon is a 256x256 rounded tile with ~9% transparent margin on
+    # every side.  Cropping to the artwork is what makes the shell icons read as
+    # "one size bigger": each asset is filled to 100% of its canvas afterwards,
+    # nothing is scaled down to make room for padding.
+    $srcBmp = [System.Drawing.Bitmap]$source
+    $minX = $srcBmp.Width; $minY = $srcBmp.Height; $maxX = -1; $maxY = -1
+    for ($y = 0; $y -lt $srcBmp.Height; $y++) {
+        for ($x = 0; $x -lt $srcBmp.Width; $x++) {
+            if ($srcBmp.GetPixel($x, $y).A -gt 8) {
+                if ($x -lt $minX) { $minX = $x }
+                if ($x -gt $maxX) { $maxX = $x }
+                if ($y -lt $minY) { $minY = $y }
+                if ($y -gt $maxY) { $maxY = $y }
+            }
+        }
+    }
+
+    if ($maxX -lt 0) { throw "App icon '$AppIcon' is fully transparent." }
+
+    $art = $srcBmp.Clone(
+        [System.Drawing.Rectangle]::new($minX, $minY, ($maxX - $minX + 1), ($maxY - $minY + 1)),
+        [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    Write-Host ("artwork: {0}x{1} cropped from {2}x{3}" -f $art.Width, $art.Height, $srcBmp.Width, $srcBmp.Height)
+
     function Save-Icon {
         param([int]$Width, [int]$Height, [string]$Path, [switch]$FitSquare)
 
@@ -145,13 +169,14 @@ try {
             $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
             $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
             if ($FitSquare) {
-                $side = [int][Math]::Round($Height * 0.86)
+                # Wide tile: square artwork at full height, centred, no shrink.
+                $side = [Math]::Min($Width, $Height)
                 $x = [int](($Width - $side) / 2)
                 $y = [int](($Height - $side) / 2)
-                $g.DrawImage($source, $x, $y, $side, $side)
+                $g.DrawImage($art, $x, $y, $side, $side)
             }
             else {
-                $g.DrawImage($source, 0, 0, $Width, $Height)
+                $g.DrawImage($art, 0, 0, $Width, $Height)
             }
         }
         finally { $g.Dispose() }
@@ -207,6 +232,8 @@ try {
     foreach ($item in $store) {
         Save-Icon -Width $item.Size -Height $item.Size -Path (Join-Path $assets $item.File)
     }
+
+    $art.Dispose()
 }
 finally { $source.Dispose() }
 

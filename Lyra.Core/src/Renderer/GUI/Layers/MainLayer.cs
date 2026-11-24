@@ -60,6 +60,14 @@ public class MainLayer : IUIEvents, IDisposable
 
     public Layer Layer { get; }
 
+    /// <summary>
+    /// Left edge of the sidebar in UI space, or <see cref="float.MaxValue"/>
+    /// when the sidebar is closed. NavLayer pins the next-image chevron
+    /// against this so the button never sits on top of the panel.
+    /// </summary>
+    public float ContentRightEdge =>
+        _sidebar.Present ? _sidebar.ArrangedBounds.Left : float.MaxValue;
+
     public event Action? OpenFileRequested;
     public event Action? OpenDirectoryRequested;
     public event Action? FullscreenRequested;

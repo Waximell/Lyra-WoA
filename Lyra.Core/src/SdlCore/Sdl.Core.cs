@@ -506,6 +506,10 @@ public partial class SdlCore : IDisposable
         events.DirectoryPicked += OnDirectoryPicked;
         events.VariantSelected += OnVariantSelected;
 
+        // On-screen chevrons are the mouse equivalent of the arrow keys.
+        _renderer.UIManager.PreviousImageRequested += PreviousImage;
+        _renderer.UIManager.NextImageRequested += NextImage;
+
         _duplicateScanService.Completed += OnDuplicateScanCompleted;
         _duplicateScanService.Aborted += OnDuplicateScanAborted;
 

@@ -1,6 +1,7 @@
 using Lyra.Common;
 using Lyra.Common.Settings;
 using Lyra.Common.Settings.Enums;
+using Lyra.FileLoader.Navigation;
 using Lyra.Renderer.GUI;
 using Lyra.Renderer.GUI.Layers;
 using Lyra.UI;
@@ -34,11 +35,18 @@ public class UIManager : IDisposable
 
     private readonly StatusLayer _statusLayer;
     private readonly MainLayer _mainLayer;
+    private readonly NavLayer _navLayer;
 
     /// <summary>
     /// User-driven UI events (menu clicks, tree picks, dropdown changes).
     /// </summary>
     public IUIEvents Events => _mainLayer;
+
+    /// <summary>Previous-image chevron clicked; the app treats it as the Left key.</summary>
+    public event Action? PreviousImageRequested;
+
+    /// <summary>Next-image chevron clicked; the app treats it as the Right key.</summary>
+    public event Action? NextImageRequested;
 
     public float DisplayScale { get; set; }
     
@@ -53,6 +61,9 @@ public class UIManager : IDisposable
         // Layers are added in bottom-to-top order.
         _statusLayer = new StatusLayer(_context);
         _mainLayer = new MainLayer(_context);
+        _navLayer = new NavLayer(_context, () => _mainLayer.ContentRightEdge);
+        _navLayer.PreviousRequested += () => PreviousImageRequested?.Invoke();
+        _navLayer.NextRequested += () => NextImageRequested?.Invoke();
     }
 
     private static void LoadConfiguredTheme()
@@ -130,7 +141,14 @@ public class UIManager : IDisposable
     //  State refresh
     // --------------------------------------------------------
 
-    public void Refresh(UIState state) => _mainLayer.Refresh(state);
+    public void Refresh(UIState state)
+    {
+        _mainLayer.Refresh(state);
+
+        // Same bounds the Left/Right keys honour, so the chevrons vanish at the
+        // first and the last image instead of clicking into nothing.
+        _navLayer.SetState(DirectoryNavigator.HasPrevious(), DirectoryNavigator.HasNext());
+    }
 
     public void RefreshCurrent() => _mainLayer.RefreshCurrent();
     
@@ -272,6 +290,7 @@ public class UIManager : IDisposable
     public void Dispose()
     {
         _mainLayer.Dispose();
+        _navLayer.Dispose();
         _statusLayer.Dispose();
         _context.Dispose();
     }

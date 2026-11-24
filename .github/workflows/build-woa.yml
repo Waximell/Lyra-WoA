@@ -136,7 +136,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path release -Force | Out-Null
-          Set-Content release/VERSION '0.6.0' -NoNewline -Encoding utf8
+          Set-Content release/VERSION '0.6.0.1' -NoNewline -Encoding utf8
           Write-Host "VERSION=$(Get-Content release/VERSION)"
 
       - name: Stage NuGet-provided natives for win-arm64
@@ -233,7 +233,7 @@ jobs:
             -OutFile out/LyraViewer-windows-arm64.msix `
             -CertPath $env:PFX_PATH `
             -CertPassword $env:PFX_PASSWORD `
-            -Version 0.6.0.0
+            -Version 0.6.0.1
 
       - uses: actions/upload-artifact@v4
         with:
@@ -252,7 +252,7 @@ jobs:
     permissions:
       contents: write
     env:
-      TAG: v0.6.0-woa
+      TAG: v0.6.0.1-woa
     steps:
       - name: Fetch artifacts
         uses: actions/download-artifact@v4
@@ -271,23 +271,12 @@ jobs:
           shopt -s globstar nullglob
           assets=(dist/**/*.zip dist/**/*.msix)
           printf 'assets: %s\n' "${assets[@]}"
-          cat > notes.md <<'EOF'
-          此分发随上游 main 编译，为 0.6.0
-
-          本仓库未对项目源码做实质调整，仅添加 CI 与 WorkFlow 并运行。
-
-          MSIX额外添加了 appExecutionAlias: Lyra 与如下格式关联：
-          '.png .apng .jpg .jpeg .jpe .jfif .gif .webp .avif  .heic .heif .bmp .ico .svg'
-
-          经初步测试与上游行为未发现偏离。
-
-          MSIX 签名为我自行生成的密钥，不保证私钥安全，非常不建议信任，如果有意使用本项目产物请务必使用松散 zip。
-          EOF
           if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
             gh release upload "$TAG" "${assets[@]}" --repo "$REPO" --clobber
           else
+            # Body intentionally left empty: the release notes are written by hand.
             gh release create "$TAG" "${assets[@]}" \
               --repo "$REPO" \
-              --title "Lyra Viewer 0.6.0 (Windows ARM64)" \
-              --notes-file notes.md
+              --title "Lyra Viewer 0.6.0.1 (Windows ARM64)" \
+              --notes ""
           fi
