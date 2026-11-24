@@ -509,6 +509,12 @@ public partial class SdlCore : IDisposable
         // On-screen chevrons are the mouse equivalent of the arrow keys.
         _renderer.UIManager.PreviousImageRequested += PreviousImage;
         _renderer.UIManager.NextImageRequested += NextImage;
+        _renderer.UIManager.FirstImageRequested += FirstImage;
+        _renderer.UIManager.LastImageRequested += LastImage;
+        _renderer.UIManager.InfoToggleRequested += ToggleInfo;
+        _renderer.UIManager.SidebarToggleRequested += ToggleSidebar;
+        _renderer.UIManager.FullscreenToggleRequested += ToggleFullscreen;
+        _renderer.UIManager.UiToggleRequested += ToggleUi;
 
         _duplicateScanService.Completed += OnDuplicateScanCompleted;
         _duplicateScanService.Aborted += OnDuplicateScanAborted;

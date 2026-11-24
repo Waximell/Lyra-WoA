@@ -48,6 +48,24 @@ public class UIManager : IDisposable
     /// <summary>Next-image chevron clicked; the app treats it as the Right key.</summary>
     public event Action? NextImageRequested;
 
+    /// <summary>Chevron held for a second or right-clicked; the app treats it as Home.</summary>
+    public event Action? FirstImageRequested;
+
+    /// <summary>Chevron held for a second or right-clicked; the app treats it as End.</summary>
+    public event Action? LastImageRequested;
+
+    /// <summary>Info corner button; same as the I key.</summary>
+    public event Action? InfoToggleRequested;
+
+    /// <summary>Sidebar corner button; same as the U key.</summary>
+    public event Action? SidebarToggleRequested;
+
+    /// <summary>Fullscreen corner button; same as the F key.</summary>
+    public event Action? FullscreenToggleRequested;
+
+    /// <summary>Stop button; hides the panes and the corner chrome.</summary>
+    public event Action? UiToggleRequested;
+
     public float DisplayScale { get; set; }
     
     public float PointerScale { get; set; } = 1f;
@@ -61,9 +79,15 @@ public class UIManager : IDisposable
         // Layers are added in bottom-to-top order.
         _statusLayer = new StatusLayer(_context);
         _mainLayer = new MainLayer(_context);
-        _navLayer = new NavLayer(_context, () => _mainLayer.ContentRightEdge);
+        _navLayer = new NavLayer(_context, () => _mainLayer.ContentRightEdge, () => _mainLayer.HelpRightEdge);
         _navLayer.PreviousRequested += () => PreviousImageRequested?.Invoke();
         _navLayer.NextRequested += () => NextImageRequested?.Invoke();
+        _navLayer.FirstRequested += () => FirstImageRequested?.Invoke();
+        _navLayer.LastRequested += () => LastImageRequested?.Invoke();
+        _navLayer.InfoToggleRequested += () => InfoToggleRequested?.Invoke();
+        _navLayer.SidebarToggleRequested += () => SidebarToggleRequested?.Invoke();
+        _navLayer.FullscreenToggleRequested += () => FullscreenToggleRequested?.Invoke();
+        _navLayer.UiToggleRequested += () => UiToggleRequested?.Invoke();
     }
 
     private static void LoadConfiguredTheme()
@@ -146,9 +170,23 @@ public class UIManager : IDisposable
         _mainLayer.Refresh(state);
 
         // Same bounds the Left/Right keys honour, so the chevrons vanish at the
-        // first and the last image instead of clicking into nothing.
-        _navLayer.SetState(DirectoryNavigator.HasPrevious(), DirectoryNavigator.HasNext());
+        // first and the last image instead of clicking into nothing.  The rest
+        // of the chrome follows the toggles so the buttons match the panes.
+        _navLayer.SetState(new NavState(
+            DirectoryNavigator.HasPrevious(),
+            DirectoryNavigator.HasNext(),
+            state.AppStates.InfoVisible,
+            state.AppStates.SidebarVisible,
+            state.AppStates.HelpVisible,
+            state.AppStates.IsFullscreen,
+            state.AppStates.UiHidden));
     }
+
+    /// <summary>
+    /// Right click on a chevron: jump to the first / last image.  Returns false
+    /// when the point is not on a chevron so the caller can carry on.
+    /// </summary>
+    public bool TryHandleSecondaryClick(float x, float y) => _navLayer.TryHandleSecondaryClick(ToUiSpace(x, y));
 
     public void RefreshCurrent() => _mainLayer.RefreshCurrent();
     

@@ -14,6 +14,13 @@ public sealed class ViewState
     public bool HelpVisible { get; private set; }
     public bool SidebarVisible { get; private set; }
 
+    /// <summary>
+    /// "Just the picture" mode driven by the stop button.  Deliberately not
+    /// part of UISettings: it is a transient viewing state, not a preference,
+    /// so it always starts off on launch.
+    /// </summary>
+    public bool UiHidden { get; private set; }
+
     public event Action<SamplingMode>? SamplingModeChanged;
     public event Action<ToneMapMode>? ToneMapModeChanged;
     public event Action<int>? ExposureStopsChanged;
@@ -87,6 +94,25 @@ public sealed class ViewState
     public void ToggleInfo() => InfoVisible = !InfoVisible;
     public void ToggleHelp() => HelpVisible = !HelpVisible;
     public void ToggleSidebar() => SidebarVisible = !SidebarVisible;
+
+    /// <summary>
+    /// The stop button.  First press closes every pane that is open and hides
+    /// the corner chrome; the next press only brings the corner chrome back -
+    /// the panes stay closed, so restoring is never a surprise layout pop.
+    /// </summary>
+    public void ToggleUi()
+    {
+        if (UiHidden)
+        {
+            UiHidden = false;
+            return;
+        }
+
+        InfoVisible = false;
+        HelpVisible = false;
+        SidebarVisible = false;
+        UiHidden = true;
+    }
 
     public UISettings Export() =>
         new(SamplingMode, BackgroundMode, InitDisplayMode, ToneMapMode, ExposureStops, InfoVisible, HelpVisible, SidebarVisible);

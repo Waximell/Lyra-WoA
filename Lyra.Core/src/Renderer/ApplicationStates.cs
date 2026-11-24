@@ -21,6 +21,9 @@ public readonly record struct ApplicationStates(
     bool InfoVisible,
     bool HelpVisible,
     bool SidebarVisible,
+
+    bool IsFullscreen,
+    bool UiHidden,
     
     bool DropActive,
     bool DropAborted,

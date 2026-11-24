@@ -218,6 +218,8 @@ public partial class SdlCore
 
     private void ToggleSidebar() => _viewState.ToggleSidebar();
 
+    private void ToggleUi() => _viewState.ToggleUi();
+
     private void OpenFileExplorer()
     {
         var path = DirectoryNavigator.GetCurrent() ?? DirectoryNavigator.GetTopDirectory();

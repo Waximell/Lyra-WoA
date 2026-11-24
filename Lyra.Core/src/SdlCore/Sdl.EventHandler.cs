@@ -60,11 +60,13 @@ public partial class SdlCore
 
                 case EventType.WindowEnterFullscreen:
                     _isFullscreen = true;
+                    _renderer.IsFullscreen = true;
                     Logger.Debug($"[EventHandler] Fullscreen: {_isFullscreen}");
                     break;
 
                 case EventType.WindowLeaveFullscreen:
                     _isFullscreen = false;
+                    _renderer.IsFullscreen = false;
                     Logger.Debug($"[EventHandler] Fullscreen: {_isFullscreen}");
                     break;
 
@@ -98,6 +100,12 @@ public partial class SdlCore
 
     private void OnMouseButtonDown(Event e)
     {
+        // The chevrons answer a right click with first / last image.  This has
+        // to run before the UI pass, which only knows about the left button.
+        if (e.Button.Button == ButtonRight &&
+            _renderer.UIManager.TryHandleSecondaryClick(e.Motion.X, e.Motion.Y))
+            return;
+
         if (_renderer.UIManager.HandlePointerDown(e.Motion.X, e.Motion.Y))
             return;
 

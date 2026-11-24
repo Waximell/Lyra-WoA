@@ -68,6 +68,13 @@ public class MainLayer : IUIEvents, IDisposable
     public float ContentRightEdge =>
         _sidebar.Present ? _sidebar.ArrangedBounds.Left : float.MaxValue;
 
+    /// <summary>
+    /// Right edge of the help pane when it is on screen, else 0.  NavLayer puts
+    /// the stop button just right of it, since both live in the bottom left.
+    /// </summary>
+    public float HelpRightEdge =>
+        _helpSection.Root.Present ? _helpSection.Root.ArrangedBounds.Right : 0f;
+
     public event Action? OpenFileRequested;
     public event Action? OpenDirectoryRequested;
     public event Action? FullscreenRequested;
@@ -179,6 +186,9 @@ public class MainLayer : IUIEvents, IDisposable
 
     private void RefreshInternal(UIState state)
     {
+        // The stop button works by turning the panes off in ViewState, so the
+        // pane visibility here is the plain toggle state - UiHidden only drives
+        // the corner chrome in NavLayer.
         _infoSection.Root.Present = state.AppStates.InfoVisible;
         _helpSection.Root.Present = state.AppStates.HelpVisible;
         _sidebar.Present = state.AppStates.SidebarVisible;

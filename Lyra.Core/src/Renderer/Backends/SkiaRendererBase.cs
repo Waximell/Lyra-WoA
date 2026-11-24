@@ -44,6 +44,13 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
 
     public UIManager UIManager { get; private set; }
 
+    /// <summary>
+    /// Mirrors the window's fullscreen state so the UI can pick maximise /
+    /// minimise.  SdlCore owns the window, so it pushes the value here from the
+    /// fullscreen window events.
+    /// </summary>
+    public bool IsFullscreen { get; set; }
+
     private readonly string _backend;
 
     /// One-shot diagnostic: whether a frame carried values above SDR white.
@@ -375,6 +382,8 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
             InfoVisible = _viewState.InfoVisible,
             HelpVisible = _viewState.HelpVisible,
             SidebarVisible = _viewState.SidebarVisible,
+            IsFullscreen = IsFullscreen,
+            UiHidden = _viewState.UiHidden,
             DropActive = drop.Active,
             DropAborted = drop.Aborted,
             DropPathsEnqueued = drop.PathsEnqueued,
