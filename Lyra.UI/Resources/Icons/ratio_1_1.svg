@@ -1,0 +1,5 @@
+<svg role="img" xmlns="http://www.w3.org/2000/svg" width="48px" height="48px" viewBox="0 0 24 24" aria-labelledby="ratioIconTitle" stroke="#5389E3" stroke-width="1" stroke-linecap="round" stroke-linejoin="miter" fill="none" color="#5389E3">
+  <title id="ratioIconTitle">Aspect Ratio 1:1</title>
+  <rect width="18" height="18" x="3" y="3"/>
+  <text x="12" y="12" dy="0.35em" text-anchor="middle" textLength="13" lengthAdjust="spacingAndGlyphs" font-family="Helvetica, Arial, sans-serif" font-size="9.75" font-weight="500" fill="#5389E3" stroke="none">1:1</text>
+</svg>

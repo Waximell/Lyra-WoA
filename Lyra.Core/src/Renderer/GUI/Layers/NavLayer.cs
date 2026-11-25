@@ -32,10 +32,14 @@ public readonly record struct NavState(
 //    hold 1s      -> first / last image   (same path as Home / End)
 //    right click  -> first / last image
 //
-//  Bottom right, a row of four small buttons (one third of a chevron):
+//  Bottom right, a row of six small buttons (one third of a chevron), left to
+//  right in the order of the shortcuts they mirror:
+//    zoom in     -> wheel up / +     (hold to keep zooming)
+//    zoom out    -> wheel down / -   (hold to keep zooming)
 //    info        -> i   (info pane)
-//    zoom        -> 0   (fit to screen / original size; the glyph follows the
-//                        current display mode, zoom in while fitted)
+//    fit / 1:1   -> 0   (fit to screen / original size; the glyph follows the
+//                        current display mode: 1:1 while fitted, image at
+//                        actual size)
 //    dashboard   -> u   (sidebar)
 //    maximise    -> f   (enter fullscreen; becomes minimise while fullscreen)
 //
@@ -59,6 +63,8 @@ public sealed class NavLayer : IDisposable
     public event Action? InfoToggleRequested;
     public event Action? SidebarToggleRequested;
     public event Action? FullscreenToggleRequested;
+    public event Action? ZoomInRequested;
+    public event Action? ZoomOutRequested;
     public event Action? ZoomToggleRequested;
     public event Action? UiToggleRequested;
 
@@ -72,6 +78,8 @@ public sealed class NavLayer : IDisposable
         _root.InfoClicked += () => InfoToggleRequested?.Invoke();
         _root.SidebarClicked += () => SidebarToggleRequested?.Invoke();
         _root.FullscreenClicked += () => FullscreenToggleRequested?.Invoke();
+        _root.ZoomInClicked += () => ZoomInRequested?.Invoke();
+        _root.ZoomOutClicked += () => ZoomOutRequested?.Invoke();
         _root.ZoomClicked += () => ZoomToggleRequested?.Invoke();
         _root.UiClicked += () => UiToggleRequested?.Invoke();
 
@@ -97,13 +105,15 @@ internal sealed class NavOverlay : ComponentBase, IContainer
     private const float MinSize = 36f;
     private const float MaxSize = 96f;
 
-    private readonly NavChevronButton _previous;
-    private readonly NavChevronButton _next;
+    private readonly NavHoldButton _previous;
+    private readonly NavHoldButton _next;
 
     private readonly Button _info;
     private readonly Button _sidebar;
-    private readonly Button _zoomFit;
-    private readonly Button _zoomOriginal;
+    private readonly NavHoldButton _zoomIn;
+    private readonly NavHoldButton _zoomOut;
+    private readonly Button _modeFit;
+    private readonly Button _modeActual;
     private readonly Button _enterFullscreen;
     private readonly Button _exitFullscreen;
     private readonly Button _stop;
@@ -114,6 +124,8 @@ internal sealed class NavOverlay : ComponentBase, IContainer
     private readonly SvgImage _sidebarIcon;
     private readonly SvgImage _zoomInIcon;
     private readonly SvgImage _zoomOutIcon;
+    private readonly SvgImage _modeFitIcon;
+    private readonly SvgImage _modeActualIcon;
     private readonly SvgImage _maximiseIcon;
     private readonly SvgImage _minimiseIcon;
     private readonly SvgImage _stopIcon;
@@ -124,8 +136,8 @@ internal sealed class NavOverlay : ComponentBase, IContainer
 
     private NavState _state;
 
-    /// <summary>True while the zoom button shows "zoom in", i.e. fit to screen.</summary>
-    private bool _zoomIsFit = true;
+    /// <summary>True while the fit toggle shows 1:1, i.e. fit to screen.</summary>
+    private bool _modeIsFit = true;
 
     public event Action? PreviousClicked;
     public event Action? NextClicked;
@@ -134,6 +146,8 @@ internal sealed class NavOverlay : ComponentBase, IContainer
     public event Action? InfoClicked;
     public event Action? SidebarClicked;
     public event Action? FullscreenClicked;
+    public event Action? ZoomInClicked;
+    public event Action? ZoomOutClicked;
     public event Action? ZoomClicked;
     public event Action? UiClicked;
 
@@ -152,15 +166,19 @@ internal sealed class NavOverlay : ComponentBase, IContainer
         _minimiseIcon = new SvgImage(ResourceLoader.GetSvg("minimise"), MinSize, MinSize);
         _zoomInIcon = new SvgImage(ResourceLoader.GetSvg("zoom_in"), MinSize, MinSize);
         _zoomOutIcon = new SvgImage(ResourceLoader.GetSvg("zoom_out"), MinSize, MinSize);
-        _stopIcon = new SvgImage(ResourceLoader.GetSvg("stop"), MinSize, MinSize);
+        _modeFitIcon = new SvgImage(ResourceLoader.GetSvg("ratio_1_1"), MinSize, MinSize);
+        _modeActualIcon = new SvgImage(ResourceLoader.GetSvg("image"), MinSize, MinSize);
+        _stopIcon = new SvgImage(ResourceLoader.GetSvg("rectangle"), MinSize, MinSize);
 
         _previous = BuildChevron(_previousIcon);
         _next = BuildChevron(_nextIcon);
 
         _info = BuildSmall(_infoIcon);
         _sidebar = BuildSmall(_sidebarIcon);
-        _zoomFit = BuildSmall(_zoomInIcon);
-        _zoomOriginal = BuildSmall(_zoomOutIcon);
+        _zoomIn = BuildZoom(_zoomInIcon);
+        _zoomOut = BuildZoom(_zoomOutIcon);
+        _modeFit = BuildSmall(_modeFitIcon);
+        _modeActual = BuildSmall(_modeActualIcon);
         _enterFullscreen = BuildSmall(_maximiseIcon);
         _exitFullscreen = BuildSmall(_minimiseIcon);
         _stop = BuildSmall(_stopIcon);
@@ -172,8 +190,15 @@ internal sealed class NavOverlay : ComponentBase, IContainer
 
         _info.Click += () => InfoClicked?.Invoke();
         _sidebar.Click += () => SidebarClicked?.Invoke();
-        _zoomFit.Click += () => ZoomClicked?.Invoke();
-        _zoomOriginal.Click += () => ZoomClicked?.Invoke();
+
+        // One wheel notch per click; holding keeps zooming at the same step.
+        _zoomIn.Click += () => ZoomInClicked?.Invoke();
+        _zoomIn.Repeat += () => ZoomInClicked?.Invoke();
+        _zoomOut.Click += () => ZoomOutClicked?.Invoke();
+        _zoomOut.Repeat += () => ZoomOutClicked?.Invoke();
+
+        _modeFit.Click += () => ZoomClicked?.Invoke();
+        _modeActual.Click += () => ZoomClicked?.Invoke();
         _enterFullscreen.Click += () => FullscreenClicked?.Invoke();
         _exitFullscreen.Click += () => FullscreenClicked?.Invoke();
         _stop.Click += () => UiClicked?.Invoke();
@@ -181,7 +206,7 @@ internal sealed class NavOverlay : ComponentBase, IContainer
         _children =
         [
             _previous, _next,
-            _info, _sidebar, _zoomFit, _zoomOriginal,
+            _zoomIn, _zoomOut, _info, _modeFit, _modeActual, _sidebar,
             _enterFullscreen, _exitFullscreen,
             _stop
         ];
@@ -204,7 +229,7 @@ internal sealed class NavOverlay : ComponentBase, IContainer
     public void AddComponents(params IComponent[] children) =>
         throw new NotSupportedException("Nav overlay children are fixed.");
 
-    private static NavChevronButton BuildChevron(SvgImage icon) => new()
+    private static NavHoldButton BuildChevron(SvgImage icon) => new()
     {
         // Ghost is fully transparent at rest and only tints on hover, which is
         // the "no background, just the arrow" look while keeping feedback.
@@ -224,6 +249,19 @@ internal sealed class NavOverlay : ComponentBase, IContainer
         CornerRadius = 3f,
         MinWidth = 0f,
         MinHeight = 0f
+    };
+
+    /// <summary>Zoom step button: click once, or hold to keep stepping.</summary>
+    private static NavHoldButton BuildZoom(SvgImage icon) => new()
+    {
+        Variant = ButtonVariant.Ghost,
+        Icon = ButtonIcon.Only,
+        IconImage = icon,
+        CornerRadius = 3f,
+        MinWidth = 0f,
+        MinHeight = 0f,
+        HoldDelay = TimeSpan.FromMilliseconds(500),
+        RepeatInterval = TimeSpan.FromMilliseconds(60)
     };
 
     public bool TryHandleSecondaryClick(SKPoint point)
@@ -257,19 +295,21 @@ internal sealed class NavOverlay : ComponentBase, IContainer
         var showCorner = !state.UiHidden;
         _info.Present = showCorner;
         _sidebar.Present = showCorner;
+        _zoomIn.Present = showCorner;
+        _zoomOut.Present = showCorner;
         _enterFullscreen.Present = showCorner && !state.IsFullscreen;
         _exitFullscreen.Present = showCorner && state.IsFullscreen;
 
-        // Zoom in while fitted, zoom out at actual size.  Free zoom (the user
-        // wheeled or pressed +/-) keeps whichever glyph was last shown, so only
-        // the two named modes move the button.
+        // 1:1 while fitted, image at actual size.  Free zoom (the user wheeled
+        // or pressed +/-) keeps whichever glyph was last shown, so only the two
+        // named modes move the button.
         if (state.DisplayMode == DisplayMode.FitToScreen)
-            _zoomIsFit = true;
+            _modeIsFit = true;
         else if (state.DisplayMode == DisplayMode.OriginalImageSize)
-            _zoomIsFit = false;
+            _modeIsFit = false;
 
-        _zoomFit.Present = showCorner && _zoomIsFit;
-        _zoomOriginal.Present = showCorner && !_zoomIsFit;
+        _modeFit.Present = showCorner && _modeIsFit;
+        _modeActual.Present = showCorner && !_modeIsFit;
 
         // The stop button is always available - it is the way back.
         _stop.Present = true;
@@ -324,14 +364,21 @@ internal sealed class NavOverlay : ComponentBase, IContainer
         var listRight = cornerRight - small - ButtonGap;
         ArrangeSmall(_sidebar, _sidebarIcon, listRight, rowTop, small);
 
-        // Second from the left of the row: the display mode toggle, sitting
-        // between info and the sidebar so the order matches the keys it mirrors.
-        var zoomRight = listRight - small - ButtonGap;
-        ArrangeSmall(_zoomFit, _zoomInIcon, zoomRight, rowTop, small);
-        ArrangeSmall(_zoomOriginal, _zoomOutIcon, zoomRight, rowTop, small);
+        // Fit toggle, immediately left of the sidebar button.
+        var modeRight = listRight - small - ButtonGap;
+        ArrangeSmall(_modeFit, _modeFitIcon, modeRight, rowTop, small);
+        ArrangeSmall(_modeActual, _modeActualIcon, modeRight, rowTop, small);
 
-        var infoRight = zoomRight - small - ButtonGap;
+        var infoRight = modeRight - small - ButtonGap;
         ArrangeSmall(_info, _infoIcon, infoRight, rowTop, small);
+
+        // Zoom steps, at the left end of the row: out then in, so "in" sits
+        // first when reading left to right.
+        var zoomOutRight = infoRight - small - ButtonGap;
+        ArrangeSmall(_zoomOut, _zoomOutIcon, zoomOutRight, rowTop, small);
+
+        var zoomInRight = zoomOutRight - small - ButtonGap;
+        ArrangeSmall(_zoomIn, _zoomInIcon, zoomInRight, rowTop, small);
 
         // Bottom-left stop.  While the help pane is open it stacks directly
         // above it (never on top of the text) and drops back to the corner once
@@ -392,6 +439,8 @@ internal sealed class NavOverlay : ComponentBase, IContainer
             _minimiseIcon.Dispose();
             _zoomInIcon.Dispose();
             _zoomOutIcon.Dispose();
+            _modeFitIcon.Dispose();
+            _modeActualIcon.Dispose();
             _stopIcon.Dispose();
         }
 
@@ -399,26 +448,34 @@ internal sealed class NavOverlay : ComponentBase, IContainer
     }
 
     /// <summary>
-    /// Chevron with a long-press action: holding the button for a second fires
-    /// <see cref="LongPress"/> instead of a click.  The check runs from the
-    /// render pass, which is the only per-frame hook a component gets.
+    /// Button with a hold gesture.  Once <see cref="HoldDelay"/> has elapsed the
+    /// button fires <see cref="LongPress"/> a single time and, when
+    /// <see cref="RepeatInterval"/> is set, keeps firing <see cref="Repeat"/>
+    /// every interval until the pointer is released.  The timing check runs from
+    /// the render pass, which is the only per-frame hook a component gets; a
+    /// plain click is suppressed once the hold has fired.
     /// </summary>
-    private sealed class NavChevronButton : Button
+    private sealed class NavHoldButton : Button
     {
-        private static readonly TimeSpan HoldDuration = TimeSpan.FromSeconds(1);
-
         private long _pressedAt;
         private bool _pressed;
-        private bool _longFired;
+        private bool _holdFired;
+        private TimeSpan _lastRepeat;
+
+        public TimeSpan HoldDelay { get; init; } = TimeSpan.FromSeconds(1);
+
+        /// <summary>Null keeps the gesture one-shot (hold = a single action).</summary>
+        public TimeSpan? RepeatInterval { get; init; }
 
         public event Action? LongPress;
+        public event Action? Repeat;
 
         protected override void OnPointerDownCore(SKPoint point)
         {
             base.OnPointerDownCore(point);
             _pressedAt = Stopwatch.GetTimestamp();
             _pressed = true;
-            _longFired = false;
+            _holdFired = false;
         }
 
         protected override void OnPointerUpCore(SKPoint point)
@@ -429,8 +486,8 @@ internal sealed class NavOverlay : ComponentBase, IContainer
 
         protected override void OnClick()
         {
-            // The hold already did its work; do not also step one image.
-            if (_longFired)
+            // The hold already did its work; do not also fire a single step.
+            if (_holdFired)
                 return;
 
             base.OnClick();
@@ -438,10 +495,29 @@ internal sealed class NavOverlay : ComponentBase, IContainer
 
         protected override void RenderContent(SKCanvas canvas, SKRect contentBounds)
         {
-            if (_pressed && !_longFired && Stopwatch.GetElapsedTime(_pressedAt) >= HoldDuration)
+            if (_pressed)
             {
-                _longFired = true;
-                LongPress?.Invoke();
+                var held = Stopwatch.GetElapsedTime(_pressedAt);
+
+                if (!_holdFired)
+                {
+                    if (held >= HoldDelay)
+                    {
+                        _holdFired = true;
+                        _lastRepeat = held;
+                        LongPress?.Invoke();
+
+                        // The first repeat lands with the hold itself, so a held
+                        // zoom button keeps moving at a steady cadence.
+                        if (RepeatInterval is not null)
+                            Repeat?.Invoke();
+                    }
+                }
+                else if (RepeatInterval is { } interval && held - _lastRepeat >= interval)
+                {
+                    _lastRepeat = held;
+                    Repeat?.Invoke();
+                }
             }
 
             base.RenderContent(canvas, contentBounds);

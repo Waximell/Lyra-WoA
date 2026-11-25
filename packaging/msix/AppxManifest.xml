@@ -62,7 +62,6 @@ __ARCH__       ProcessorArchitecture: arm64 or x64, from the -Architecture param
               <uap:FileType>.jpe</uap:FileType>
               <uap:FileType>.jfif</uap:FileType>
               <!-- others -->
-              <uap:FileType>.gif</uap:FileType>
               <uap:FileType>.webp</uap:FileType>
               <uap:FileType>.avif</uap:FileType>
               <uap:FileType>.heic</uap:FileType>

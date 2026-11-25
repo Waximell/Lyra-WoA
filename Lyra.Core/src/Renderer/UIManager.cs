@@ -63,7 +63,13 @@ public class UIManager : IDisposable
     /// <summary>Fullscreen corner button; same as the F key.</summary>
     public event Action? FullscreenToggleRequested;
 
-    /// <summary>Zoom corner button; same as the 0 key (fit / actual size).</summary>
+    /// <summary>Zoom in corner button; same step as one wheel notch up.</summary>
+    public event Action? ZoomInRequested;
+
+    /// <summary>Zoom out corner button; same step as one wheel notch down.</summary>
+    public event Action? ZoomOutRequested;
+
+    /// <summary>Fit / actual size corner button; same as the 0 key.</summary>
     public event Action? ZoomToggleRequested;
 
     /// <summary>Stop button; hides the panes and the corner chrome.</summary>
@@ -90,6 +96,8 @@ public class UIManager : IDisposable
         _navLayer.InfoToggleRequested += () => InfoToggleRequested?.Invoke();
         _navLayer.SidebarToggleRequested += () => SidebarToggleRequested?.Invoke();
         _navLayer.FullscreenToggleRequested += () => FullscreenToggleRequested?.Invoke();
+        _navLayer.ZoomInRequested += () => ZoomInRequested?.Invoke();
+        _navLayer.ZoomOutRequested += () => ZoomOutRequested?.Invoke();
         _navLayer.ZoomToggleRequested += () => ZoomToggleRequested?.Invoke();
         _navLayer.UiToggleRequested += () => UiToggleRequested?.Invoke();
     }
